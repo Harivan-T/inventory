@@ -1,4 +1,4 @@
-import { db } from "../db/index";
+import { db } from "@/lib/db";
 import {
   workspaces,
   drugCategories,
@@ -12,7 +12,7 @@ import {
   stores,
   storeStock,
   itemBatches,
-} from "../db/schema";
+} from "@/lib/db/schema";
 
 async function seed() {
   console.log("🌱 Seeding database...");
