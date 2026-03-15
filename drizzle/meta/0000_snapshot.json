@@ -1,0 +1,938 @@
+{
+  "id": "0da310d1-cd0c-408a-a137-234cfdebc74e",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.dispensing_log": {
+      "name": "dispensing_log",
+      "schema": "",
+      "columns": {
+        "logid": {
+          "name": "logid",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "drugid": {
+          "name": "drugid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workspaceid": {
+          "name": "workspaceid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "patientref": {
+          "name": "patientref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prescriptionref": {
+          "name": "prescriptionref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispensedby": {
+          "name": "dispensedby",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dispensing_log_drugid_drugs_drugid_fk": {
+          "name": "dispensing_log_drugid_drugs_drugid_fk",
+          "tableFrom": "dispensing_log",
+          "tableTo": "drugs",
+          "columnsFrom": [
+            "drugid"
+          ],
+          "columnsTo": [
+            "drugid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dispensing_log_workspaceid_workspaces_workspaceid_fk": {
+          "name": "dispensing_log_workspaceid_workspaces_workspaceid_fk",
+          "tableFrom": "dispensing_log",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspaceid"
+          ],
+          "columnsTo": [
+            "workspaceid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.drug_alternatives": {
+      "name": "drug_alternatives",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "drugid": {
+          "name": "drugid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "alternativeid": {
+          "name": "alternativeid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "drug_alternatives_drugid_drugs_drugid_fk": {
+          "name": "drug_alternatives_drugid_drugs_drugid_fk",
+          "tableFrom": "drug_alternatives",
+          "tableTo": "drugs",
+          "columnsFrom": [
+            "drugid"
+          ],
+          "columnsTo": [
+            "drugid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "drug_alternatives_alternativeid_drugs_drugid_fk": {
+          "name": "drug_alternatives_alternativeid_drugs_drugid_fk",
+          "tableFrom": "drug_alternatives",
+          "tableTo": "drugs",
+          "columnsFrom": [
+            "alternativeid"
+          ],
+          "columnsTo": [
+            "drugid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.drug_categories": {
+      "name": "drug_categories",
+      "schema": "",
+      "columns": {
+        "categoryid": {
+          "name": "categoryid",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workspaceid": {
+          "name": "workspaceid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "atcgroup": {
+          "name": "atcgroup",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "drug_categories_workspaceid_workspaces_workspaceid_fk": {
+          "name": "drug_categories_workspaceid_workspaces_workspaceid_fk",
+          "tableFrom": "drug_categories",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspaceid"
+          ],
+          "columnsTo": [
+            "workspaceid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.drug_interactions": {
+      "name": "drug_interactions",
+      "schema": "",
+      "columns": {
+        "interactionid": {
+          "name": "interactionid",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "drugid_a": {
+          "name": "drugid_a",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "drugid_b": {
+          "name": "drugid_b",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "clinicaleffect": {
+          "name": "clinicaleffect",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "drug_interactions_drugid_a_drugs_drugid_fk": {
+          "name": "drug_interactions_drugid_a_drugs_drugid_fk",
+          "tableFrom": "drug_interactions",
+          "tableTo": "drugs",
+          "columnsFrom": [
+            "drugid_a"
+          ],
+          "columnsTo": [
+            "drugid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "drug_interactions_drugid_b_drugs_drugid_fk": {
+          "name": "drug_interactions_drugid_b_drugs_drugid_fk",
+          "tableFrom": "drug_interactions",
+          "tableTo": "drugs",
+          "columnsFrom": [
+            "drugid_b"
+          ],
+          "columnsTo": [
+            "drugid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.drug_inventory": {
+      "name": "drug_inventory",
+      "schema": "",
+      "columns": {
+        "inventoryid": {
+          "name": "inventoryid",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "drugid": {
+          "name": "drugid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workspaceid": {
+          "name": "workspaceid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "minquantity": {
+          "name": "minquantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "maxquantity": {
+          "name": "maxquantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unitcost": {
+          "name": "unitcost",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sellingprice": {
+          "name": "sellingprice",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expirydate": {
+          "name": "expirydate",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "batchnumber": {
+          "name": "batchnumber",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updatedat": {
+          "name": "updatedat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "drug_inventory_drugid_drugs_drugid_fk": {
+          "name": "drug_inventory_drugid_drugs_drugid_fk",
+          "tableFrom": "drug_inventory",
+          "tableTo": "drugs",
+          "columnsFrom": [
+            "drugid"
+          ],
+          "columnsTo": [
+            "drugid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "drug_inventory_workspaceid_workspaces_workspaceid_fk": {
+          "name": "drug_inventory_workspaceid_workspaces_workspaceid_fk",
+          "tableFrom": "drug_inventory",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspaceid"
+          ],
+          "columnsTo": [
+            "workspaceid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.drug_suppliers": {
+      "name": "drug_suppliers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "drugid": {
+          "name": "drugid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supplierid": {
+          "name": "supplierid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "suppliercode": {
+          "name": "suppliercode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "leadtimedays": {
+          "name": "leadtimedays",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ispreferred": {
+          "name": "ispreferred",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "drug_suppliers_drugid_drugs_drugid_fk": {
+          "name": "drug_suppliers_drugid_drugs_drugid_fk",
+          "tableFrom": "drug_suppliers",
+          "tableTo": "drugs",
+          "columnsFrom": [
+            "drugid"
+          ],
+          "columnsTo": [
+            "drugid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "drug_suppliers_supplierid_suppliers_supplierid_fk": {
+          "name": "drug_suppliers_supplierid_suppliers_supplierid_fk",
+          "tableFrom": "drug_suppliers",
+          "tableTo": "suppliers",
+          "columnsFrom": [
+            "supplierid"
+          ],
+          "columnsTo": [
+            "supplierid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.drugs": {
+      "name": "drugs",
+      "schema": "",
+      "columns": {
+        "drugid": {
+          "name": "drugid",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workspaceid": {
+          "name": "workspaceid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "categoryid": {
+          "name": "categoryid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "genericname": {
+          "name": "genericname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "atccode": {
+          "name": "atccode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nationalcode": {
+          "name": "nationalcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "form": {
+          "name": "form",
+          "type": "drug_form",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "strength": {
+          "name": "strength",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manufacturer": {
+          "name": "manufacturer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "indication": {
+          "name": "indication",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "interaction": {
+          "name": "interaction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "warning": {
+          "name": "warning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sideeffect": {
+          "name": "sideeffect",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pregnancy": {
+          "name": "pregnancy",
+          "type": "pregnancy_category",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "storagetype": {
+          "name": "storagetype",
+          "type": "storage_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "traffic": {
+          "name": "traffic",
+          "type": "traffic",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requiresprescription": {
+          "name": "requiresprescription",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "insuranceapproved": {
+          "name": "insuranceapproved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "isactive": {
+          "name": "isactive",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'{}'::jsonb"
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updatedat": {
+          "name": "updatedat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "drugs_workspaceid_workspaces_workspaceid_fk": {
+          "name": "drugs_workspaceid_workspaces_workspaceid_fk",
+          "tableFrom": "drugs",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspaceid"
+          ],
+          "columnsTo": [
+            "workspaceid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "drugs_categoryid_drug_categories_categoryid_fk": {
+          "name": "drugs_categoryid_drug_categories_categoryid_fk",
+          "tableFrom": "drugs",
+          "tableTo": "drug_categories",
+          "columnsFrom": [
+            "categoryid"
+          ],
+          "columnsTo": [
+            "categoryid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.suppliers": {
+      "name": "suppliers",
+      "schema": "",
+      "columns": {
+        "supplierid": {
+          "name": "supplierid",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workspaceid": {
+          "name": "workspaceid",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contactname": {
+          "name": "contactname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "address": {
+          "name": "address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isactive": {
+          "name": "isactive",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "suppliers_workspaceid_workspaces_workspaceid_fk": {
+          "name": "suppliers_workspaceid_workspaces_workspaceid_fk",
+          "tableFrom": "suppliers",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspaceid"
+          ],
+          "columnsTo": [
+            "workspaceid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.workspaces": {
+      "name": "workspaces",
+      "schema": "",
+      "columns": {
+        "workspaceid": {
+          "name": "workspaceid",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "isactive": {
+          "name": "isactive",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "createdat": {
+          "name": "createdat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updatedat": {
+          "name": "updatedat",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.drug_form": {
+      "name": "drug_form",
+      "schema": "public",
+      "values": [
+        "tablet",
+        "capsule",
+        "inhaler",
+        "syrup",
+        "injection",
+        "cream",
+        "drops",
+        "suppository",
+        "patch",
+        "powder"
+      ]
+    },
+    "public.pregnancy_category": {
+      "name": "pregnancy_category",
+      "schema": "public",
+      "values": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "X",
+        "N"
+      ]
+    },
+    "public.storage_type": {
+      "name": "storage_type",
+      "schema": "public",
+      "values": [
+        "room_temperature",
+        "refrigerated",
+        "frozen",
+        "protect_from_light",
+        "protect_from_moisture"
+      ]
+    },
+    "public.traffic": {
+      "name": "traffic",
+      "schema": "public",
+      "values": [
+        "otc",
+        "rx",
+        "controlled",
+        "narcotic"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
