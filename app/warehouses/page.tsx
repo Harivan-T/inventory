@@ -108,13 +108,11 @@ export default function WarehousesPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const fetchWarehouses = async () => {
-  try {
-    const res = await fetch("/api/warehouses");
-    const json = await res.json();
-    // ensure it's always an array
-    setWarehouses(Array.isArray(json) ? json : []);
-  } finally { setLoading(false); }
-};
+    try {
+      const res = await fetch("/api/warehouses");
+      setWarehouses(await res.json());
+    } finally { setLoading(false); }
+  };
 
   useEffect(() => { fetchWarehouses(); }, []);
 
