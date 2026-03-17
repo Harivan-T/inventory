@@ -31,22 +31,6 @@ export const pregnancyCategoryEnum = pgEnum("pregnancy_category", [
   "A", "B", "C", "D", "X", "N",
 ]);
 
-export const itemTypeEnum = pgEnum("item_type", [
-  "drug", "supply", "consumable", "reagent", "asset", "radiology",
-]);
-
-export const inventoryCategoryEnum = pgEnum("inventory_category", [
-  "pharmacy", "lab", "hospital", "radiology",
-]);
-
-export const storeTypeEnum = pgEnum("store_type", [
-  "main", "sub",
-]);
-
-export const requisitionStatusEnum = pgEnum("requisition_status", [
-  "pending", "approved", "rejected", "fulfilled", "partial",
-]);
-
 // ─── Workspaces ───────────────────────────────────────────────────────────────
 
 export const workspaces = pgTable("workspaces", {
@@ -69,11 +53,10 @@ export const drugCategories = pgTable("drug_categories", {
 });
 
 // ─── Drugs ────────────────────────────────────────────────────────────────────
-
 export const drugs = pgTable("drugs", {
   drugid:               uuid("drugid").primaryKey().defaultRandom(),
   workspaceid:          uuid("workspaceid").references(() => workspaces.workspaceid).notNull(),
-  categoryid:           uuid("category").references(() => drugCategories.categoryid),
+  categoryid:           uuid("category"),  // ← "category" in Neon, not "categoryid"
   name:                 text("name").notNull(),
   genericname:          text("genericname"),
   atccode:              text("atccode"),
@@ -215,6 +198,166 @@ export const warehouseStock = pgTable("warehouse_stock", {
   createdat:   timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+// ─── Relations ────────────────────────────────────────────────────────────────
+
+export const drugsRelations = relations(drugs, ({ one, many }) => ({
+  workspace:       one(workspaces, { fields: [drugs.workspaceid], references: [workspaces.workspaceid] }),
+  category:        one(drugCategories, { fields: [drugs.categoryid], references: [drugCategories.categoryid] }),
+  inventory:       many(drugInventory),
+  suppliers:       many(drugSuppliers),
+  interactionsAsA: many(drugInteractions, { relationName: "drug_a" }),
+  interactionsAsB: many(drugInteractions, { relationName: "drug_b" }),
+  alternatives:    many(drugAlternatives, { relationName: "drug" }),
+  dispensingLog:   many(dispensingLog),
+  warehouseStock:  many(warehouseStock),
+}));
+
+export const drugInventoryRelations = relations(drugInventory, ({ one }) => ({
+  drug:      one(drugs, { fields: [drugInventory.drugid], references: [drugs.drugid] }),
+  workspace: one(workspaces, { fields: [drugInventory.workspaceid], references: [workspaces.workspaceid] }),
+}));
+
+export const drugSuppliersRelations = relations(drugSuppliers, ({ one }) => ({
+  drug:     one(drugs, { fields: [drugSuppliers.drugid], references: [drugs.drugid] }),
+  supplier: one(suppliers, { fields: [drugSuppliers.supplierid], references: [suppliers.supplierid] }),
+}));
+
+export const drugInteractionsRelations = relations(drugInteractions, ({ one }) => ({
+  drugA: one(drugs, { fields: [drugInteractions.drugid_a], references: [drugs.drugid], relationName: "drug_a" }),
+  drugB: one(drugs, { fields: [drugInteractions.drugid_b], references: [drugs.drugid], relationName: "drug_b" }),
+}));
+
+export const dispensingLogRelations = relations(dispensingLog, ({ one }) => ({
+  drug:      one(drugs, { fields: [dispensingLog.drugid], references: [drugs.drugid] }),
+  workspace: one(workspaces, { fields: [dispensingLog.workspaceid], references: [workspaces.workspaceid] }),
+}));
+
+export const warehousesRelations = relations(warehouses, ({ many }) => ({
+  sections: many(warehouseSections),
+  stock:    many(warehouseStock),
+}));
+
+export const warehouseSectionsRelations = relations(warehouseSections, ({ one, many }) => ({
+  warehouse: one(warehouses, { fields: [warehouseSections.warehouseid], references: [warehouses.id] }),
+  stock:     many(warehouseStock),
+}));
+
+export const warehouseStockRelations = relations(warehouseStock, ({ one }) => ({
+  warehouse: one(warehouses, { fields: [warehouseStock.warehouseid], references: [warehouses.id] }),
+  section:   one(warehouseSections, { fields: [warehouseStock.sectionid], references: [warehouseSections.id] }),
+  drug:      one(drugs, { fields: [warehouseStock.drugid], references: [drugs.drugid] }),
+}));
+
+
+// ─── Item Batches ─────────────────────────────────────────────────────────────
+export const itemBatches = pgTable("item_batches", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  itemid:          uuid("item_id").references(() => drugs.drugid).notNull(),
+  batchnumber:     text("batch_number").notNull(),
+  expirydate:      timestamp("expiry_date", { withTimezone: true }),
+  manufacturedate: timestamp("manufacture_date", { withTimezone: true }),
+  createdat:       timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ─── Inventory Stock ──────────────────────────────────────────────────────────
+export const inventoryStock = pgTable("inventory_stock", {
+  id:                uuid("id").primaryKey().defaultRandom(),
+  itemid:            uuid("item_id").references(() => drugs.drugid).notNull(),
+  warehouseid:       uuid("warehouse_id").references(() => warehouses.id).notNull(),
+  batchid:           uuid("batch_id").references(() => itemBatches.id),
+  quantity:          integer("quantity").notNull().default(0),
+  reservedquantity:  integer("reserved_quantity").notNull().default(0),
+  lastupdated:       timestamp("last_updated", { withTimezone: true }).defaultNow(),
+});
+
+// ─── Stock Transactions ───────────────────────────────────────────────────────
+export const stockTransactions = pgTable("stock_transactions", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  itemid:          uuid("item_id").references(() => drugs.drugid).notNull(),
+  warehouseid:     uuid("warehouse_id").references(() => warehouses.id).notNull(),
+  batchid:         uuid("batch_id").references(() => itemBatches.id),
+  transactiontype: text("transaction_type").notNull(), // STOCK_IN, STOCK_OUT, TRANSFER, ADJUSTMENT, WASTAGE, RETURN
+  quantity:        integer("quantity").notNull(),
+  referencetype:   text("reference_type"),
+  referenceid:     text("reference_id"),
+  notes:           text("notes"),
+  createdby:       text("created_by"),
+  createdat:       timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ─── Stock Transfers ──────────────────────────────────────────────────────────
+export const stockTransfers = pgTable("stock_transfers", {
+  id:                   uuid("id").primaryKey().defaultRandom(),
+  itemid:               uuid("item_id").references(() => drugs.drugid).notNull(),
+  batchid:              uuid("batch_id").references(() => itemBatches.id),
+  sourcewarehouseid:    uuid("source_warehouse_id").references(() => warehouses.id).notNull(),
+  destinationwarehouseid: uuid("destination_warehouse_id").references(() => warehouses.id).notNull(),
+  quantity:             integer("quantity").notNull(),
+  reason:               text("reason"),
+  createdby:            text("created_by"),
+  createdat:            timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ─── Stock Adjustments ────────────────────────────────────────────────────────
+export const stockAdjustments = pgTable("stock_adjustments", {
+  id:                 uuid("id").primaryKey().defaultRandom(),
+  itemid:             uuid("item_id").references(() => drugs.drugid).notNull(),
+  warehouseid:        uuid("warehouse_id").references(() => warehouses.id).notNull(),
+  batchid:            uuid("batch_id").references(() => itemBatches.id),
+  adjustmentquantity: integer("adjustment_quantity").notNull(),
+  reason:             text("reason"),
+  createdby:          text("created_by"),
+  createdat:          timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ─── Relations ────────────────────────────────────────────────────────────────
+export const itemBatchesRelations = relations(itemBatches, ({ one, many }) => ({
+  item:              one(drugs, { fields: [itemBatches.itemid], references: [drugs.drugid] }),
+  inventoryStock:    many(inventoryStock),
+  stockTransactions: many(stockTransactions),
+}));
+
+export const inventoryStockRelations = relations(inventoryStock, ({ one }) => ({
+  item:      one(drugs, { fields: [inventoryStock.itemid], references: [drugs.drugid] }),
+  warehouse: one(warehouses, { fields: [inventoryStock.warehouseid], references: [warehouses.id] }),
+  batch:     one(itemBatches, { fields: [inventoryStock.batchid], references: [itemBatches.id] }),
+}));
+
+export const stockTransactionsRelations = relations(stockTransactions, ({ one }) => ({
+  item:      one(drugs, { fields: [stockTransactions.itemid], references: [drugs.drugid] }),
+  warehouse: one(warehouses, { fields: [stockTransactions.warehouseid], references: [warehouses.id] }),
+  batch:     one(itemBatches, { fields: [stockTransactions.batchid], references: [itemBatches.id] }),
+}));
+
+export const stockTransfersRelations = relations(stockTransfers, ({ one }) => ({
+  item:                one(drugs, { fields: [stockTransfers.itemid], references: [drugs.drugid] }),
+  batch:               one(itemBatches, { fields: [stockTransfers.batchid], references: [itemBatches.id] }),
+  sourceWarehouse:     one(warehouses, { fields: [stockTransfers.sourcewarehouseid], references: [warehouses.id] }),
+  destinationWarehouse: one(warehouses, { fields: [stockTransfers.destinationwarehouseid], references: [warehouses.id] }),
+}));
+
+export const stockAdjustmentsRelations = relations(stockAdjustments, ({ one }) => ({
+  item:      one(drugs, { fields: [stockAdjustments.itemid], references: [drugs.drugid] }),
+  warehouse: one(warehouses, { fields: [stockAdjustments.warehouseid], references: [warehouses.id] }),
+  batch:     one(itemBatches, { fields: [stockAdjustments.batchid], references: [itemBatches.id] }),
+}));
+
+export const itemTypeEnum = pgEnum("item_type", [
+  "drug", "supply", "consumable", "reagent", "asset", "radiology",
+]);
+
+export const inventoryCategoryEnum = pgEnum("inventory_category", [
+  "pharmacy", "lab", "hospital", "radiology",
+]);
+
+export const storeTypeEnum = pgEnum("store_type", [
+  "main", "sub",
+]);
+
+export const requisitionStatusEnum = pgEnum("requisition_status", [
+  "pending", "approved", "rejected", "fulfilled", "partial",
+]);
+
 // ─── Items (Universal Item Master) ───────────────────────────────────────────
 
 export const items = pgTable("items", {
@@ -241,17 +384,6 @@ export const items = pgTable("items", {
   supplierid:        uuid("supplier_id").references(() => suppliers.supplierid),
   barcode:           text("barcode"),
   drugid:            uuid("drug_id").references(() => drugs.drugid),
-  // supply/consumable specific
-  singleuse:         boolean("single_use").default(false),
-  sterile:           boolean("sterile").default(false),
-  // asset specific
-  assetcategory:     text("asset_category"),
-  serialnumber:      text("serial_number"),
-  // radiology specific
-  contrasttype:      text("contrast_type"),
-  // lab specific
-  analyzercompat:    text("analyzer_compat"),
-  criticalreagent:   boolean("critical_reagent").default(false),
   isactive:          boolean("is_active").default(true),
   metadata:          jsonb("metadata").default({}),
   createdat:         timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -267,78 +399,6 @@ export const unitConversions = pgTable("unit_conversions", {
   touom:     text("to_uom").notNull(),
   factor:    decimal("factor", { precision: 10, scale: 4 }).notNull(),
   createdat: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-// ─── Item Batches ─────────────────────────────────────────────────────────────
-
-export const itemBatches = pgTable("item_batches", {
-  id:              uuid("id").primaryKey().defaultRandom(),
-  itemid:          uuid("item_id").references(() => items.id).notNull(),   // ← items, not drugs
-  warehouseid:     uuid("warehouse_id").references(() => warehouses.id),
-  batchnumber:     text("batch_number").notNull(),
-  quantity:        integer("quantity").notNull().default(0),
-  unitcost:        decimal("unit_cost", { precision: 10, scale: 2 }),
-  sellingprice:    decimal("selling_price", { precision: 10, scale: 2 }),
-  expirydate:      timestamp("expiry_date", { withTimezone: true }),
-  manufacturedate: timestamp("manufacture_date", { withTimezone: true }),
-  isquarantined:   boolean("is_quarantined").default(false),
-  createdat:       timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-// ─── Inventory Stock ──────────────────────────────────────────────────────────
-
-export const inventoryStock = pgTable("inventory_stock", {
-  id:               uuid("id").primaryKey().defaultRandom(),
-  itemid:           uuid("item_id").references(() => items.id).notNull(),
-  warehouseid:      uuid("warehouse_id").references(() => warehouses.id).notNull(),
-  batchid:          uuid("batch_id").references(() => itemBatches.id),
-  quantity:         integer("quantity").notNull().default(0),
-  reservedquantity: integer("reserved_quantity").notNull().default(0),
-  lastupdated:      timestamp("last_updated", { withTimezone: true }).defaultNow(),
-});
-
-// ─── Stock Transactions ───────────────────────────────────────────────────────
-
-export const stockTransactions = pgTable("stock_transactions", {
-  id:              uuid("id").primaryKey().defaultRandom(),
-  itemid:          uuid("item_id").references(() => items.id).notNull(),
-  warehouseid:     uuid("warehouse_id").references(() => warehouses.id).notNull(),
-  batchid:         uuid("batch_id").references(() => itemBatches.id),
-  transactiontype: text("transaction_type").notNull(),
-  quantity:        integer("quantity").notNull(),
-  referencetype:   text("reference_type"),
-  referenceid:     text("reference_id"),
-  patientref:      text("patient_ref"),
-  notes:           text("notes"),
-  createdby:       text("created_by"),
-  createdat:       timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-// ─── Stock Transfers ──────────────────────────────────────────────────────────
-
-export const stockTransfers = pgTable("stock_transfers", {
-  id:                     uuid("id").primaryKey().defaultRandom(),
-  itemid:                 uuid("item_id").references(() => items.id).notNull(),
-  batchid:                uuid("batch_id").references(() => itemBatches.id),
-  sourcewarehouseid:      uuid("source_warehouse_id").references(() => warehouses.id).notNull(),
-  destinationwarehouseid: uuid("destination_warehouse_id").references(() => warehouses.id).notNull(),
-  quantity:               integer("quantity").notNull(),
-  reason:                 text("reason"),
-  createdby:              text("created_by"),
-  createdat:              timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-// ─── Stock Adjustments ────────────────────────────────────────────────────────
-
-export const stockAdjustments = pgTable("stock_adjustments", {
-  id:                 uuid("id").primaryKey().defaultRandom(),
-  itemid:             uuid("item_id").references(() => items.id).notNull(),
-  warehouseid:        uuid("warehouse_id").references(() => warehouses.id).notNull(),
-  batchid:            uuid("batch_id").references(() => itemBatches.id),
-  adjustmentquantity: integer("adjustment_quantity").notNull(),
-  reason:             text("reason"),
-  createdby:          text("created_by"),
-  createdat:          timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 // ─── Stores (Department Sub-stores) ──────────────────────────────────────────
@@ -382,7 +442,6 @@ export const storeTransactions = pgTable("store_transactions", {
   referencetype:   text("reference_type"),
   referenceid:     text("reference_id"),
   patientref:      text("patient_ref"),
-  prescriptionref: text("prescription_ref"),
   notes:           text("notes"),
   createdby:       text("created_by"),
   createdat:       timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -413,7 +472,7 @@ export const controlledDrugLog = pgTable("controlled_drug_log", {
   storeid:         uuid("store_id").references(() => stores.id).notNull(),
   itemid:          uuid("item_id").references(() => items.id).notNull(),
   batchid:         uuid("batch_id").references(() => itemBatches.id),
-  actiontype:      text("action_type").notNull(),   // DISPENSE, RETURN, DESTROY, AUDIT
+  actiontype:      text("action_type").notNull(),
   quantity:        integer("quantity").notNull(),
   patientref:      text("patient_ref"),
   prescriptionref: text("prescription_ref"),
@@ -448,119 +507,21 @@ export const reagentAssignments = pgTable("reagent_assignments", {
   consumptionpertest: decimal("consumption_per_test", { precision: 10, scale: 4 }),
   criticalflag:       boolean("critical_flag").default(false),
   isactive:           boolean("is_active").default(true),
-  notes:              text("notes"),
   createdat:          timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedat:          timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
-
-// ─── Lab Test Consumption Log ─────────────────────────────────────────────────
-
-export const labConsumptionLog = pgTable("lab_consumption_log", {
-  id:               uuid("id").primaryKey().defaultRandom(),
-  assignmentid:     uuid("assignment_id").references(() => reagentAssignments.id).notNull(),
-  itemid:           uuid("item_id").references(() => items.id).notNull(),
-  storeid:          uuid("store_id").references(() => stores.id),
-  batchid:          uuid("batch_id").references(() => itemBatches.id),
-  testcount:        integer("test_count").notNull().default(1),
-  quantityconsumed: decimal("quantity_consumed", { precision: 10, scale: 4 }).notNull(),
-  patientref:       text("patient_ref"),
-  sampleref:        text("sample_ref"),
-  runnotes:         text("run_notes"),
-  createdby:        text("created_by"),
-  createdat:        timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 // ─── Relations ────────────────────────────────────────────────────────────────
-
-export const drugsRelations = relations(drugs, ({ one, many }) => ({
-  workspace:       one(workspaces, { fields: [drugs.workspaceid], references: [workspaces.workspaceid] }),
-  category:        one(drugCategories, { fields: [drugs.categoryid], references: [drugCategories.categoryid] }),
-  inventory:       many(drugInventory),
-  suppliers:       many(drugSuppliers),
-  interactionsAsA: many(drugInteractions, { relationName: "drug_a" }),
-  interactionsAsB: many(drugInteractions, { relationName: "drug_b" }),
-  alternatives:    many(drugAlternatives, { relationName: "drug" }),
-  dispensingLog:   many(dispensingLog),
-  warehouseStock:  many(warehouseStock),
-  items:           many(items),
-}));
-
-export const drugInventoryRelations = relations(drugInventory, ({ one }) => ({
-  drug:      one(drugs, { fields: [drugInventory.drugid], references: [drugs.drugid] }),
-  workspace: one(workspaces, { fields: [drugInventory.workspaceid], references: [workspaces.workspaceid] }),
-}));
-
-export const drugSuppliersRelations = relations(drugSuppliers, ({ one }) => ({
-  drug:     one(drugs, { fields: [drugSuppliers.drugid], references: [drugs.drugid] }),
-  supplier: one(suppliers, { fields: [drugSuppliers.supplierid], references: [suppliers.supplierid] }),
-}));
-
-export const drugInteractionsRelations = relations(drugInteractions, ({ one }) => ({
-  drugA: one(drugs, { fields: [drugInteractions.drugid_a], references: [drugs.drugid], relationName: "drug_a" }),
-  drugB: one(drugs, { fields: [drugInteractions.drugid_b], references: [drugs.drugid], relationName: "drug_b" }),
-}));
-
-export const dispensingLogRelations = relations(dispensingLog, ({ one }) => ({
-  drug:      one(drugs, { fields: [dispensingLog.drugid], references: [drugs.drugid] }),
-  workspace: one(workspaces, { fields: [dispensingLog.workspaceid], references: [workspaces.workspaceid] }),
-}));
-
-export const warehousesRelations = relations(warehouses, ({ many }) => ({
-  sections: many(warehouseSections),
-  stock:    many(warehouseStock),
-  stores:   many(stores),
-}));
-
-export const warehouseSectionsRelations = relations(warehouseSections, ({ one, many }) => ({
-  warehouse: one(warehouses, { fields: [warehouseSections.warehouseid], references: [warehouses.id] }),
-  stock:     many(warehouseStock),
-}));
-
-export const warehouseStockRelations = relations(warehouseStock, ({ one }) => ({
-  warehouse: one(warehouses, { fields: [warehouseStock.warehouseid], references: [warehouses.id] }),
-  section:   one(warehouseSections, { fields: [warehouseStock.sectionid], references: [warehouseSections.id] }),
-  drug:      one(drugs, { fields: [warehouseStock.drugid], references: [drugs.drugid] }),
-}));
 
 export const itemsRelations = relations(items, ({ one, many }) => ({
   workspace:          one(workspaces,  { fields: [items.workspaceid], references: [workspaces.workspaceid] }),
   supplier:           one(suppliers,   { fields: [items.supplierid],  references: [suppliers.supplierid] }),
   drug:               one(drugs,       { fields: [items.drugid],      references: [drugs.drugid] }),
-  batches:            many(itemBatches),
-  inventoryStock:     many(inventoryStock),
-  stockTransactions:  many(stockTransactions),
   unitConversions:    many(unitConversions),
   storeStock:         many(storeStock),
   storeTransactions:  many(storeTransactions),
   storeRequisitions:  many(storeRequisitions),
   controlledDrugLog:  many(controlledDrugLog),
   reagentAssignments: many(reagentAssignments),
-  labConsumptionLog:  many(labConsumptionLog),
-  batchQuarantine:    many(batchQuarantine),
-}));
-
-export const itemBatchesRelations = relations(itemBatches, ({ one, many }) => ({
-  item:              one(items, { fields: [itemBatches.itemid], references: [items.id] }),
-  warehouse:         one(warehouses, { fields: [itemBatches.warehouseid], references: [warehouses.id] }),
-  inventoryStock:    many(inventoryStock),
-  stockTransactions: many(stockTransactions),
-  storeStock:        many(storeStock),
-  storeTransactions: many(storeTransactions),
-  controlledDrugLog: many(controlledDrugLog),
-  labConsumptionLog: many(labConsumptionLog),
-  quarantine:        many(batchQuarantine),
-}));
-
-export const inventoryStockRelations = relations(inventoryStock, ({ one }) => ({
-  item:      one(items,      { fields: [inventoryStock.itemid],      references: [items.id] }),
-  warehouse: one(warehouses, { fields: [inventoryStock.warehouseid], references: [warehouses.id] }),
-  batch:     one(itemBatches,{ fields: [inventoryStock.batchid],     references: [itemBatches.id] }),
-}));
-
-export const stockTransactionsRelations = relations(stockTransactions, ({ one }) => ({
-  item:      one(items,      { fields: [stockTransactions.itemid],      references: [items.id] }),
-  warehouse: one(warehouses, { fields: [stockTransactions.warehouseid], references: [warehouses.id] }),
-  batch:     one(itemBatches,{ fields: [stockTransactions.batchid],     references: [itemBatches.id] }),
 }));
 
 export const storesRelations = relations(stores, ({ one, many }) => ({
@@ -570,7 +531,6 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
   transactions:      many(storeTransactions),
   requisitions:      many(storeRequisitions),
   controlledDrugLog: many(controlledDrugLog),
-  labConsumptionLog: many(labConsumptionLog),
 }));
 
 export const storeStockRelations = relations(storeStock, ({ one }) => ({
@@ -597,23 +557,6 @@ export const controlledDrugLogRelations = relations(controlledDrugLog, ({ one })
   batch: one(itemBatches, { fields: [controlledDrugLog.batchid],  references: [itemBatches.id] }),
 }));
 
-export const reagentAssignmentsRelations = relations(reagentAssignments, ({ one, many }) => ({
-  item:             one(items, { fields: [reagentAssignments.itemid], references: [items.id] }),
-  consumptionLogs:  many(labConsumptionLog),
-}));
-
-export const labConsumptionLogRelations = relations(labConsumptionLog, ({ one }) => ({
-  assignment: one(reagentAssignments, { fields: [labConsumptionLog.assignmentid], references: [reagentAssignments.id] }),
-  item:       one(items,              { fields: [labConsumptionLog.itemid],        references: [items.id] }),
-  store:      one(stores,             { fields: [labConsumptionLog.storeid],       references: [stores.id] }),
-  batch:      one(itemBatches,        { fields: [labConsumptionLog.batchid],       references: [itemBatches.id] }),
-}));
-
-export const batchQuarantineRelations = relations(batchQuarantine, ({ one }) => ({
-  batch: one(itemBatches, { fields: [batchQuarantine.batchid], references: [itemBatches.id] }),
-  item:  one(items,       { fields: [batchQuarantine.itemid],  references: [items.id] }),
-}));
-
-export const unitConversionsRelations = relations(unitConversions, ({ one }) => ({
-  item: one(items, { fields: [unitConversions.itemid], references: [items.id] }),
+export const reagentAssignmentsRelations = relations(reagentAssignments, ({ one }) => ({
+  item: one(items, { fields: [reagentAssignments.itemid], references: [items.id] }),
 }));

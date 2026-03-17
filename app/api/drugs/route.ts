@@ -3,7 +3,6 @@ import { neonDb, localDb } from "@/lib/db";
 import { drugs } from "@/lib/db/schema";
 import { eq, ilike, or, sql } from "drizzle-orm";
 
-// GET /api/drugs?search=xxx — reads from Neon
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
@@ -26,6 +25,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(results);
   } catch (error) {
+    console.error("Drugs API error:", error); // ← add this
     return NextResponse.json({ error: "Failed to fetch drugs" }, { status: 500 });
   }
 }
