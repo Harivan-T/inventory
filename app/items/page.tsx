@@ -164,17 +164,18 @@ export default function ItemsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [toast, setToast]     = useState<string | null>(null);
 
-  const fetchItems = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (search)     params.set("search",   search);
-      if (typeFilter) params.set("type",     typeFilter);
-      if (catFilter)  params.set("category", catFilter);
-      const res = await fetch(`/api/items?${params}`);
-      setItems(await res.json());
-    } finally { setLoading(false); }
-  };
+ const fetchItems = async () => {
+  setLoading(true);
+  try {
+    const params = new URLSearchParams();
+    if (search)     params.set("search",   search);
+    if (typeFilter) params.set("type",     typeFilter);
+    if (catFilter)  params.set("category", catFilter);
+    const res  = await fetch(`/api/items?${params}`);
+    const data = await res.json();
+    setItems(Array.isArray(data) ? data : []);
+  } finally { setLoading(false); }
+};
 
   useEffect(() => { fetchItems(); }, [search, typeFilter, catFilter]);
 
@@ -187,12 +188,12 @@ export default function ItemsPage() {
     fetchItems();
   };
 
-  const stats = {
-    total:      items.length,
-    controlled: items.filter(i => i.controlled).length,
-    lowstock:   0,
-    types:      [...new Set(items.map(i => i.itemtype))].length,
-  };
+const stats = {
+  total:      (items || []).length,
+  controlled: (items || []).filter(i => i.controlled).length,
+  lowstock:   0,
+  types:      [...new Set((items || []).map(i => i.itemtype))].length,
+};
 
   return (
     <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "'Inter', system-ui, sans-serif" }}>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { localDb as db, neonDb } from "@/lib/db";
+import { db } from "@/lib/db";
 import { items, suppliers } from "@/lib/db/schema";
 import { eq, ilike, or, and } from "drizzle-orm";
 

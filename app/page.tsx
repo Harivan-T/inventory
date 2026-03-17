@@ -275,6 +275,7 @@ export default function Dashboard() {
     </div>
   );
 
+  
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#f1f5f9", fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
