@@ -1,296 +1,463 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 
-const Icon = ({ d, size = 16, color = "currentColor" }: { d: string; size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+const Icon = ({ d, size = 16 }: { d: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d={d} />
   </svg>
 );
 const icons = {
   back:    "M19 12H5M12 5l-7 7 7 7",
+  flask:   "M9 3h6l1 7H8L9 3zM5 21h14a1 1 0 001-1 7 7 0 00-3.48-6.07L15 10H9l-1.52 3.93A7 7 0 005 20a1 1 0 001 1z",
   plus:    "M12 5v14M5 12h14",
   x:       "M18 6L6 18M6 6l12 12",
+  refresh: "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
+  alert:   "M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
+  beaker:  "M4 5h16M7 5v7l-3 9h16l-3-9V5",
   check:   "M20 6L9 17l-5-5",
-  flask:   "M9 3h6M9 3v8L6.8 15.6A2 2 0 008.7 19h6.6a2 2 0 001.9-3.4L15 11V3",
-  alert:   "M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01",
-  cpu:     "M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18",
-  trash:   "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6",
 };
 
-function AddAssignmentModal({ items, onClose, onSuccess }: { items: any[]; onClose: () => void; onSuccess: () => void }) {
+const s: Record<string, any> = {
+  page:     { fontFamily: "Inter,sans-serif", minHeight: "100vh", background: "#f8f9fa", color: "#111827" },
+  header:   { background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 24px", height: 56,
+              display: "flex", alignItems: "center", gap: 16 },
+  title:    { fontSize: 16, fontWeight: 600, color: "#111827" },
+  content:  { padding: 24, maxWidth: 1100, margin: "0 auto" },
+  tabs:     { display: "flex", gap: 4, marginBottom: 24, borderBottom: "1px solid #e5e7eb" },
+  tab:      (a: boolean) => ({
+    padding: "10px 18px", fontSize: 13, fontWeight: 500, border: "none", background: "none",
+    cursor: "pointer", borderBottom: a ? "2px solid #059669" : "2px solid transparent",
+    color: a ? "#059669" : "#6b7280",
+  }),
+  card:     { background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", padding: 20, marginBottom: 16 },
+  table:    { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
+  th:       { padding: "10px 12px", textAlign: "left" as const, fontWeight: 600, fontSize: 12,
+              color: "#6b7280", borderBottom: "1px solid #e5e7eb", background: "#f9fafb" },
+  td:       { padding: "10px 12px", borderBottom: "1px solid #f3f4f6", color: "#111827" },
+  btn:      (v: "primary"|"ghost"|"danger") => ({
+    padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", border: "none",
+    background: v === "primary" ? "#059669" : v === "danger" ? "#dc2626" : "#f3f4f6",
+    color: v === "ghost" ? "#374151" : "#fff",
+  }),
+  overlay:  { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.4)",
+              display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 },
+  modal:    { background: "#fff", borderRadius: 12, padding: 28, width: 520, maxHeight: "90vh", overflowY: "auto" as const },
+  label:    { fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 },
+  input:    { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db",
+              fontSize: 13, color: "#111827", boxSizing: "border-box" as const },
+  row2:     { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+  fgroup:   { marginBottom: 14 },
+  errorBox: { background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 },
+  successBox:{ background: "#d1fae5", color: "#065f46", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 12 },
+  alertCard:(sev: string) => ({
+    borderRadius: 8, padding: "12px 16px", marginBottom: 10, display: "flex", gap: 12, alignItems: "flex-start",
+    background: sev === "critical" ? "#fef2f2" : sev === "high" ? "#fff7ed" : "#f0fdf4",
+    border: `1px solid ${sev === "critical" ? "#fecaca" : sev === "high" ? "#fed7aa" : "#bbf7d0"}`,
+  }),
+};
+
+// ── Add Assignment Modal ──────────────────────────────────────────────────────
+function AddAssignmentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
     itemid: "", analyzername: "", testtype: "",
-    consumptionpertest: "", criticalflag: false,
+    consumptionpertest: "", criticalflag: false, notes: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.itemid || !form.analyzername) { setError("Reagent and analyzer are required"); return; }
-    setLoading(true); setError("");
-    try {
-      const res = await fetch("/api/lab/reagents", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, consumptionpertest: form.consumptionpertest ? Number(form.consumptionpertest) : null }),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error); }
-      onSuccess(); onClose();
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+    setError("");
+    if (!form.itemid || !form.analyzername) { setError("Item ID and analyzer name required"); return; }
+    setLoading(true);
+    const res = await fetch("/api/lab/reagents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...form,
+        consumptionpertest: form.consumptionpertest ? parseFloat(form.consumptionpertest) : null,
+      }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error || "Failed"); return; }
+    onSuccess(); onClose();
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, boxShadow: "0 24px 50px rgba(0,0,0,0.18)" }}>
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#111827" }}>Assign Reagent to Analyzer</h3>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>Link a reagent to a lab analyzer and test type</p>
-          </div>
-          <button onClick={onClose} style={{ background: "#f3f4f6", border: "none", borderRadius: 8, padding: 7, cursor: "pointer", display: "flex" }}>
-            <Icon d={icons.x} size={15} color="#6b7280" />
-          </button>
+    <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={s.modal}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600 }}>New Reagent Assignment</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer" }}><Icon d={icons.x} size={18} /></button>
         </div>
-        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Reagent *</label>
-            <select value={form.itemid} onChange={e => setForm(f => ({ ...f, itemid: e.target.value }))}
-              style={{ padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, background: "#fff", outline: "none" }}>
-              <option value="">Select reagent...</option>
-              {items.filter(i => i.itemtype === "reagent" || i.inventorycategory === "lab").map(i => (
-                <option key={i.id} value={i.id}>{i.name} ({i.itemcode})</option>
-              ))}
-            </select>
+        {error && <div style={s.errorBox}>{error}</div>}
+        <div style={s.fgroup}>
+          <label style={s.label}>Item ID (Reagent)</label>
+          <input style={s.input} value={form.itemid} onChange={e => set("itemid", e.target.value)} placeholder="Item UUID" />
+        </div>
+        <div style={s.row2}>
+          <div style={s.fgroup}>
+            <label style={s.label}>Analyzer Name</label>
+            <input style={s.input} value={form.analyzername} onChange={e => set("analyzername", e.target.value)} placeholder="e.g. Cobas c311" />
           </div>
-          {[
-            { label: "Analyzer Name *",        key: "analyzername",       type: "text",   ph: "e.g. Cobas c501" },
-            { label: "Test Type",               key: "testtype",           type: "text",   ph: "e.g. Glucose, CBC" },
-            { label: "Consumption Per Test",    key: "consumptionpertest", type: "number", ph: "e.g. 0.5 (ml per test)" },
-          ].map(f => (
-            <div key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>{f.label}</label>
-              <input type={f.type} value={(form as any)[f.key]} onChange={e => setForm(fm => ({ ...fm, [f.key]: e.target.value }))} placeholder={f.ph}
-                style={{ padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, outline: "none" }} />
-            </div>
-          ))}
-          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 14px", background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
-            <input type="checkbox" checked={form.criticalflag} onChange={e => setForm(f => ({ ...f, criticalflag: e.target.checked }))}
-              style={{ width: 16, height: 16, accentColor: "#dc2626" }} />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#dc2626" }}>Critical Reagent</div>
-              <div style={{ fontSize: 11, color: "#9ca3af" }}>Triggers alerts when stock is low</div>
-            </div>
+          <div style={s.fgroup}>
+            <label style={s.label}>Test Type</label>
+            <input style={s.input} value={form.testtype} onChange={e => set("testtype", e.target.value)} placeholder="e.g. CBC, Glucose" />
+          </div>
+        </div>
+        <div style={s.fgroup}>
+          <label style={s.label}>Consumption Per Test (units)</label>
+          <input style={s.input} type="number" step="0.0001" value={form.consumptionpertest}
+            onChange={e => set("consumptionpertest", e.target.value)} placeholder="e.g. 0.5" />
+        </div>
+        <div style={s.fgroup}>
+          <label style={{ ...s.label, display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="checkbox" checked={form.criticalflag} onChange={e => set("criticalflag", e.target.checked)} />
+            Mark as Critical Reagent
           </label>
-          {error && <p style={{ margin: 0, padding: "10px 14px", background: "#fef2f2", borderRadius: 8, fontSize: 13, color: "#dc2626" }}>{error}</p>}
         </div>
-        <div style={{ padding: "14px 24px 20px", display: "flex", gap: 10, justifyContent: "flex-end", borderTop: "1px solid #f3f4f6" }}>
-          <button onClick={onClose} style={{ padding: "9px 18px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#374151" }}>Cancel</button>
-          <button onClick={handleSave} disabled={loading}
-            style={{ padding: "9px 22px", border: "none", borderRadius: 8, background: loading ? "#93c5fd" : "#2563eb", color: "#fff", fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer" }}>
-            {loading ? "Saving..." : "Assign"}
-          </button>
+        <div style={s.fgroup}>
+          <label style={s.label}>Notes</label>
+          <input style={s.input} value={form.notes} onChange={e => set("notes", e.target.value)} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+          <button style={s.btn("ghost")} onClick={onClose}>Cancel</button>
+          <button style={s.btn("primary")} onClick={handleSave} disabled={loading}>{loading ? "Saving…" : "Save"}</button>
         </div>
       </div>
     </div>
   );
 }
 
-export default function LabPage() {
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [items, setItems]             = useState<any[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [showModal, setShowModal]     = useState(false);
-  const [toast, setToast]             = useState<string | null>(null);
-  const [filterAnalyzer, setFilter]   = useState("");
+// ── Log Consumption Modal ─────────────────────────────────────────────────────
+function LogConsumptionModal({ assignments, stores, onClose, onSuccess }: {
+  assignments: any[]; stores: any[];
+  onClose: () => void; onSuccess: () => void;
+}) {
+  const [form, setForm] = useState({
+    assignmentid: "", storeid: "", testcount: "1",
+    patientref: "", sampleref: "", runnotes: "", createdby: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+  const [success, setSuccess] = useState("");
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
-  const fetchAll = async () => {
+  const selectedAssignment = assignments.find(a => a.id === form.assignmentid);
+
+  const handleSave = async () => {
+    setError(""); setSuccess("");
+    if (!form.assignmentid || !form.testcount) { setError("Assignment and test count required"); return; }
+    if (!form.storeid) { setError("Store required for stock deduction"); return; }
     setLoading(true);
-    try {
-      const [aRes, iRes] = await Promise.all([fetch("/api/lab/reagents"), fetch("/api/items?category=lab")]);
-      setAssignments(await aRes.json());
-      setItems(await iRes.json());
-    } finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchAll(); }, []);
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-
-  const toggleActive = async (id: string, current: boolean) => {
-    await fetch("/api/lab/reagents", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, isactive: !current }) });
-    fetchAll();
-  };
-
-  const filtered = filterAnalyzer ? assignments.filter(a => a.analyzername?.toLowerCase().includes(filterAnalyzer.toLowerCase())) : assignments;
-  const analyzers = [...new Set(assignments.map(a => a.analyzername).filter(Boolean))];
-  const critical  = assignments.filter(a => a.criticalflag && a.isactive);
-
-  const stats = {
-    total:      assignments.length,
-    active:     assignments.filter(a => a.isactive).length,
-    critical:   critical.length,
-    analyzers:  analyzers.length,
+    const res = await fetch("/api/lab/consumption", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, testcount: parseInt(form.testcount) }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error || "Failed"); return; }
+    setSuccess(`Logged ${data.testsRun} test(s). Consumed: ${data.quantityConsumed} units.`);
+    setTimeout(() => { onSuccess(); onClose(); }, 1200);
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <style>{`* { box-sizing: border-box; } .row:hover { background: #f8fafc !important; }`}</style>
-
-      <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 28px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#6b7280", textDecoration: "none", padding: "5px 10px", borderRadius: 6, background: "#f3f4f6" }}>
-            <Icon d={icons.back} size={13} color="#6b7280" /> Dashboard
-          </Link>
-          <span style={{ color: "#d1d5db" }}>›</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Lab Inventory</span>
+    <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={s.modal}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600 }}>Log Test Run</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer" }}><Icon d={icons.x} size={18} /></button>
         </div>
-        <button onClick={() => setShowModal(true)}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-          <Icon d={icons.plus} size={14} color="#fff" /> Assign Reagent
-        </button>
-      </div>
+        {error   && <div style={s.errorBox}>{error}</div>}
+        {success && <div style={s.successBox}>{success}</div>}
 
-      <div style={{ padding: "24px 28px" }}>
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#111827" }}>Lab Sub-Inventory</h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>Reagent-analyzer assignments, consumption per test, and critical stock monitoring</p>
+        <div style={s.fgroup}>
+          <label style={s.label}>Reagent / Analyzer Assignment</label>
+          <select style={s.input} value={form.assignmentid} onChange={e => set("assignmentid", e.target.value)}>
+            <option value="">Select assignment…</option>
+            {assignments.map((a: any) => (
+              <option key={a.id} value={a.id}>
+                {a.analyzername} — {a.testtype || "General"} (×{a.consumptionpertest} per test)
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-          {[
-            { label: "Total Assignments", value: stats.total,     color: "#059669", bg: "#d1fae5" },
-            { label: "Active",            value: stats.active,    color: "#2563eb", bg: "#eff6ff" },
-            { label: "Critical Reagents", value: stats.critical,  color: "#dc2626", bg: "#fee2e2" },
-            { label: "Analyzers",         value: stats.analyzers, color: "#7c3aed", bg: "#ede9fe" },
-          ].map(s => (
-            <div key={s.label} style={{ background: "#fff", borderRadius: 12, padding: "16px 20px", border: "1px solid #f3f4f6" }}>
-              <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 500, marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 26, fontWeight: 700, color: s.color }}>{s.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Critical alert banner */}
-        {critical.length > 0 && (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-            <Icon d={icons.alert} size={16} color="#dc2626" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#dc2626" }}>{critical.length} critical reagent{critical.length > 1 ? "s" : ""} assigned — monitor stock levels closely:</span>
-            <span style={{ fontSize: 13, color: "#dc2626" }}>{critical.map(c => c.reagentname).join(", ")}</span>
+        {selectedAssignment && (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8,
+                        padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+            <strong>Consumption: </strong>
+            {selectedAssignment.consumptionpertest} units/test
+            &nbsp;·&nbsp;
+            <strong>Total: </strong>
+            {(parseFloat(selectedAssignment.consumptionpertest || "0") * parseInt(form.testcount || "1")).toFixed(4)} units
           </div>
         )}
 
-        {/* Filter */}
-        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #f3f4f6", padding: "12px 16px", marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
-          <select value={filterAnalyzer} onChange={e => setFilter(e.target.value)}
-            style={{ padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, background: "#fff", outline: "none", color: "#374151", minWidth: 200 }}>
-            <option value="">All Analyzers</option>
-            {analyzers.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-          {filterAnalyzer && (
-            <button onClick={() => setFilter("")} style={{ fontSize: 12, color: "#6b7280", background: "#f3f4f6", border: "none", borderRadius: 6, padding: "7px 12px", cursor: "pointer", fontWeight: 600 }}>
-              Clear
-            </button>
-          )}
-          <span style={{ fontSize: 13, color: "#9ca3af", marginLeft: "auto" }}>{filtered.length} assignments</span>
+        <div style={s.row2}>
+          <div style={s.fgroup}>
+            <label style={s.label}>Number of Tests</label>
+            <input style={s.input} type="number" min="1" value={form.testcount}
+              onChange={e => set("testcount", e.target.value)} />
+          </div>
+          <div style={s.fgroup}>
+            <label style={s.label}>Store (for deduction)</label>
+            <select style={s.input} value={form.storeid} onChange={e => set("storeid", e.target.value)}>
+              <option value="">Select store…</option>
+              {stores.map((st: any) => <option key={st.id} value={st.id}>{st.name}</option>)}
+            </select>
+          </div>
         </div>
 
-        {/* Table */}
-        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #f3f4f6", overflow: "hidden" }}>
-          {loading ? (
-            <div style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Loading...</div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={s.row2}>
+          <div style={s.fgroup}>
+            <label style={s.label}>Patient Ref (optional)</label>
+            <input style={s.input} value={form.patientref} onChange={e => set("patientref", e.target.value)} placeholder="MRN-XXXX" />
+          </div>
+          <div style={s.fgroup}>
+            <label style={s.label}>Sample Ref</label>
+            <input style={s.input} value={form.sampleref} onChange={e => set("sampleref", e.target.value)} placeholder="S-XXXX" />
+          </div>
+        </div>
+
+        <div style={s.row2}>
+          <div style={s.fgroup}>
+            <label style={s.label}>Run By</label>
+            <input style={s.input} value={form.createdby} onChange={e => set("createdby", e.target.value)} />
+          </div>
+          <div style={s.fgroup}>
+            <label style={s.label}>Notes</label>
+            <input style={s.input} value={form.runnotes} onChange={e => set("runnotes", e.target.value)} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+          <button style={s.btn("ghost")} onClick={onClose}>Cancel</button>
+          <button style={s.btn("primary")} onClick={handleSave} disabled={loading}>{loading ? "Logging…" : "Log Run"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function LabPage() {
+  const [tab, setTab]               = useState<"assignments"|"consumption"|"alerts">("assignments");
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [consumptionLog, setConsumptionLog] = useState<any[]>([]);
+  const [alerts, setAlerts]         = useState<any[]>([]);
+  const [stores, setStores]         = useState<any[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [showAddModal, setShowAddModal]         = useState(false);
+  const [showConsumeModal, setShowConsumeModal] = useState(false);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [aRes, cRes, alRes, stRes] = await Promise.all([
+        fetch("/api/lab/reagents"),
+        fetch("/api/lab/consumption"),
+        fetch("/api/alerts"),
+        fetch("/api/stores"),
+      ]);
+      const [aData, cData, alData, stData] = await Promise.all([
+        aRes.json(), cRes.json(), alRes.json(), stRes.json(),
+      ]);
+      setAssignments(aData.assignments || []);
+      setConsumptionLog(cData.logs || []);
+      setAlerts((alData.alerts || []).filter((a: any) => a.area === "lab" || a.type === "critical_reagent"));
+      setStores(stData.stores || []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const fmt = (d: any) => d ? new Date(d).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" }) : "—";
+
+  // Analyzer summary
+  const analyzerMap: Record<string, any[]> = {};
+  assignments.forEach((a: any) => {
+    if (!analyzerMap[a.analyzername]) analyzerMap[a.analyzername] = [];
+    analyzerMap[a.analyzername].push(a);
+  });
+
+  return (
+    <div style={s.page}>
+      <style>{`input,select,textarea{color:#111827 !important;}`}</style>
+      <div style={s.header}>
+        <Link href="/" style={{ color: "#6b7280", display: "flex" }}><Icon d={icons.back} size={18} /></Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon d={icons.flask} size={18} />
+          <span style={s.title}>Lab Hub</span>
+        </div>
+        {alerts.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fef2f2",
+                        border: "1px solid #fecaca", borderRadius: 8, padding: "4px 12px", fontSize: 13, color: "#dc2626" }}>
+            <Icon d={icons.alert} size={14} />
+            {alerts.filter((a: any) => a.severity === "critical").length} critical alerts
+          </div>
+        )}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button onClick={fetchAll} style={s.btn("ghost")}><Icon d={icons.refresh} size={14} /></button>
+          {tab === "assignments"  && <button style={s.btn("primary")} onClick={() => setShowAddModal(true)}>Add Assignment</button>}
+          {tab === "consumption" && <button style={s.btn("primary")} onClick={() => setShowConsumeModal(true)}>Log Test Run</button>}
+        </div>
+      </div>
+
+      <div style={s.content}>
+
+        {/* Analyzer summary cards */}
+        {Object.keys(analyzerMap).length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12, marginBottom: 24 }}>
+            {Object.entries(analyzerMap).map(([name, items]) => (
+              <div key={name} style={{ ...s.card, marginBottom: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", marginBottom: 4 }}>{name}</div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>{items.length} reagent{items.length !== 1 ? "s" : ""} assigned</div>
+                <div style={{ fontSize: 12, color: items.some((i: any) => i.criticalflag) ? "#dc2626" : "#6b7280", marginTop: 2 }}>
+                  {items.filter((i: any) => i.criticalflag).length} critical
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={s.tabs}>
+          {(["assignments","consumption","alerts"] as const).map(t => (
+            <button key={t} style={s.tab(tab === t)} onClick={() => setTab(t)}>
+              {t === "assignments" ? "Reagent Assignments" : t === "consumption" ? "Consumption Log" : `Alerts (${alerts.length})`}
+            </button>
+          ))}
+        </div>
+
+        {loading && <p style={{ color: "#6b7280", fontSize: 13 }}>Loading…</p>}
+
+        {/* ── Assignments ── */}
+        {tab === "assignments" && (
+          <div style={s.card}>
+            {assignments.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 13 }}>No assignments yet. Add reagent-analyzer assignments to track consumption.</p>
+            ) : (
+              <table style={s.table}>
                 <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    {["Reagent", "Analyzer", "Test Type", "Consumption / Test", "Critical", "Status", "Actions"].map(h => (
-                      <th key={h} style={{ padding: "10px 16px", fontSize: 11, fontWeight: 700, color: "#6b7280", textAlign: "left", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
-                    ))}
+                  <tr>
+                    <th style={s.th}>Analyzer</th>
+                    <th style={s.th}>Test Type</th>
+                    <th style={s.th}>Item ID</th>
+                    <th style={s.th}>Consumption / Test</th>
+                    <th style={s.th}>Critical</th>
+                    <th style={s.th}>Status</th>
+                    <th style={s.th}>Notes</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
-                      No reagent assignments yet.{" "}
-                      <button onClick={() => setShowModal(true)} style={{ color: "#059669", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Assign one →</button>
-                    </td></tr>
-                  )}
-                  {filtered.map((a: any) => (
-                    <tr key={a.id} className="row" style={{ borderTop: "1px solid #f9fafb", opacity: a.isactive ? 1 : 0.5 }}>
-                      <td style={{ padding: "12px 16px" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{a.reagentname ?? a.itemname ?? "—"}</div>
-                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{a.itemcode}</div>
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "#ede9fe", color: "#5b21b6" }}>{a.analyzername}</span>
-                      </td>
-                      <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151" }}>{a.testtype ?? "—"}</td>
-                      <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151" }}>
-                        {a.consumptionpertest ? `${a.consumptionpertest} units` : "—"}
-                      </td>
-                      <td style={{ padding: "12px 16px" }}>
+                  {assignments.map((a: any) => (
+                    <tr key={a.id}>
+                      <td style={{ ...s.td, fontWeight: 500 }}>{a.analyzername}</td>
+                      <td style={s.td}>{a.testtype || "—"}</td>
+                      <td style={{ ...s.td, fontFamily: "monospace", fontSize: 11 }}>{a.itemid?.slice(0,8)}…</td>
+                      <td style={{ ...s.td, color: "#6366f1", fontWeight: 600 }}>{a.consumptionpertest ? `${a.consumptionpertest} units` : "—"}</td>
+                      <td style={s.td}>
                         {a.criticalflag
-                          ? <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "#fee2e2", color: "#dc2626" }}>Critical</span>
-                          : <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "#f3f4f6", color: "#6b7280" }}>Normal</span>
-                        }
+                          ? <span style={{ background: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>CRITICAL</span>
+                          : <span style={{ color: "#9ca3af", fontSize: 12 }}>No</span>}
                       </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: a.isactive ? "#d1fae5" : "#f3f4f6", color: a.isactive ? "#065f46" : "#6b7280" }}>
+                      <td style={s.td}>
+                        <span style={{ background: a.isactive ? "#d1fae5" : "#f3f4f6", color: a.isactive ? "#065f46" : "#374151",
+                                        fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20 }}>
                           {a.isactive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td style={{ padding: "12px 16px" }}>
-                        <button onClick={() => toggleActive(a.id, a.isactive)}
-                          style={{ background: a.isactive ? "#fef3c7" : "#d1fae5", border: "none", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: a.isactive ? "#92400e" : "#065f46" }}>
-                          {a.isactive ? "Deactivate" : "Activate"}
-                        </button>
-                      </td>
+                      <td style={{ ...s.td, color: "#6b7280" }}>{a.notes || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* Analyzer summary cards */}
-        {analyzers.length > 0 && (
-          <div style={{ marginTop: 24 }}>
-            <h2 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" }}>Analyzer Summary</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
-              {analyzers.map(analyzer => {
-                const aAssignments = assignments.filter(a => a.analyzername === analyzer && a.isactive);
-                const hasCritical  = aAssignments.some(a => a.criticalflag);
-                return (
-                  <div key={analyzer} style={{ background: "#fff", borderRadius: 10, border: `1px solid ${hasCritical ? "#fecaca" : "#f3f4f6"}`, padding: "14px 16px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{analyzer}</span>
-                      {hasCritical && <Icon d={icons.alert} size={14} color="#dc2626" />}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#6b7280" }}>{aAssignments.length} reagent{aAssignments.length !== 1 ? "s" : ""} assigned</div>
-                    <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {aAssignments.slice(0, 3).map(a => (
-                        <span key={a.id} style={{ fontSize: 10, background: "#f1f5f9", color: "#374151", padding: "2px 8px", borderRadius: 20 }}>{a.reagentname ?? a.itemname}</span>
-                      ))}
-                      {aAssignments.length > 3 && <span style={{ fontSize: 10, color: "#9ca3af" }}>+{aAssignments.length - 3} more</span>}
+        {/* ── Consumption Log ── */}
+        {tab === "consumption" && (
+          <div style={s.card}>
+            {consumptionLog.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 13 }}>No consumption logged. Use "Log Test Run" to record reagent usage per test batch.</p>
+            ) : (
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    <th style={s.th}>Date</th>
+                    <th style={s.th}>Analyzer</th>
+                    <th style={s.th}>Test Type</th>
+                    <th style={s.th}>Item</th>
+                    <th style={s.th}>Tests Run</th>
+                    <th style={s.th}>Qty Consumed</th>
+                    <th style={s.th}>Patient</th>
+                    <th style={s.th}>Sample</th>
+                    <th style={s.th}>By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consumptionLog.map((l: any) => (
+                    <tr key={l.id}>
+                      <td style={s.td}>{fmt(l.createdat)}</td>
+                      <td style={{ ...s.td, fontWeight: 500 }}>{l.analyzername || "—"}</td>
+                      <td style={s.td}>{l.testtype || "—"}</td>
+                      <td style={s.td}>{l.itemname || "—"}</td>
+                      <td style={{ ...s.td, color: "#6366f1", fontWeight: 600 }}>{l.testcount}</td>
+                      <td style={{ ...s.td, color: "#dc2626", fontWeight: 600 }}>{parseFloat(l.quantityconsumed).toFixed(4)}</td>
+                      <td style={s.td}>{l.patientref || "—"}</td>
+                      <td style={s.td}>{l.sampleref || "—"}</td>
+                      <td style={s.td}>{l.createdby || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* ── Alerts ── */}
+        {tab === "alerts" && (
+          <div>
+            {alerts.length === 0 ? (
+              <div style={{ ...s.card, textAlign: "center" as const, padding: 40 }}>
+                <Icon d={icons.check} size={32} />
+                <p style={{ color: "#065f46", fontWeight: 600, marginTop: 8 }}>All reagents are within stock levels</p>
+              </div>
+            ) : (
+              alerts.map((a: any, i: number) => (
+                <div key={i} style={s.alertCard(a.severity)}>
+                  <div style={{ color: a.severity === "critical" ? "#dc2626" : a.severity === "high" ? "#ea580c" : "#16a34a", marginTop: 2 }}>
+                    <Icon d={icons.alert} size={16} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", marginBottom: 2 }}>{a.message}</div>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>
+                      {a.detail?.quantity !== undefined && `Current qty: ${a.detail.quantity}`}
+                      {a.detail?.reorderlevel !== undefined && ` · Reorder at: ${a.detail.reorderlevel}`}
+                      {a.detail?.storename && ` · Store: ${a.detail.storename}`}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20,
+                    background: a.severity === "critical" ? "#fee2e2" : a.severity === "high" ? "#fed7aa" : "#dcfce7",
+                    color:      a.severity === "critical" ? "#991b1b" : a.severity === "high" ? "#9a3412" : "#14532d",
+                  }}>{a.severity.toUpperCase()}</span>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
 
-      {showModal && <AddAssignmentModal items={items} onClose={() => setShowModal(false)} onSuccess={() => { fetchAll(); showToast("Reagent assigned!"); }} />}
-
-      {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, background: "#16a34a", color: "#fff", padding: "11px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(0,0,0,0.15)", zIndex: 2000, display: "flex", alignItems: "center", gap: 7 }}>
-          <Icon d={icons.check} size={14} color="#fff" /> {toast}
-        </div>
-      )}
+      {showAddModal     && <AddAssignmentModal  onClose={() => setShowAddModal(false)}     onSuccess={fetchAll} />}
+      {showConsumeModal && <LogConsumptionModal assignments={assignments} stores={stores}
+                            onClose={() => setShowConsumeModal(false)} onSuccess={fetchAll} />}
     </div>
   );
 }

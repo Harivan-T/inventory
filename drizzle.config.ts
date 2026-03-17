@@ -1,10 +1,9 @@
-import type { Config } from "drizzle-kit";
-
-export default {
+import { defineConfig } from "drizzle-kit";
+export default defineConfig({
   schema: "./lib/db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: "postgresql://postgres:5432@localhost:5432/drugs_dev",
+    url: "postgresql://neondb_owner:npg_RBybikcu3tz5@ep-long-river-allaqs25.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require",
   },
-} satisfies Config;
+});

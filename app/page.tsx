@@ -81,6 +81,9 @@ const icons = {
   home: "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2zM9 22V12h6v10",
   warehouse: "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2zM9 22V12h6v10",
   layers: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
+  flask: "M9 3h6l1 7H8L9 3zM5 21h14a1 1 0 001-1 7 7 0 00-3.48-6.07L15 10H9l-1.52 3.93A7 7 0 005 20a1 1 0 001 1z",
+  store: "M3 9h18v10a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM3 9l2-5h14l2 5M12 12v6M8 12v6M16 12v6",
+  report: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8M16 17H8M10 9H8",
 };
 
 // ─── Mini Bar Chart ───────────────────────────────────────────────────────────
@@ -251,12 +254,16 @@ export default function Dashboard() {
   const displayDrugs = search.trim() ? searchResults : (data?.allDrugs ?? []);
 
   const navItems = [
-    { key: "overview", label: "Overview", icon: icons.home, href: null },
-    { key: "drugs", label: "Drug Inventory", icon: icons.pill, href: null },
-    { key: "warehouses", label: "Warehouses", icon: icons.warehouse, href: "/warehouses" },
-    { key: "sections", label: "Sections", icon: icons.layers, href: "/sections" },
-    { key: "stock", label: "Stock Management", icon: icons.box, href: "/stock" },
-    { key: "stores", label: "Dept Stores", icon: icons.layers, href: "/stores" },
+    { key: "overview",  label: "Overview",          icon: icons.home,      href: null },
+    { key: "drugs",     label: "Drug Inventory",     icon: icons.pill,      href: null },
+    { key: "warehouses",label: "Warehouses",         icon: icons.warehouse, href: "/warehouses" },
+    { key: "sections",  label: "Sections",           icon: icons.layers,    href: "/sections" },
+    { key: "stock",     label: "Stock Management",   icon: icons.box,       href: "/stock" },
+    { key: "items",     label: "Item Master",        icon: icons.box,       href: "/items" },
+    { key: "stores",    label: "Dept Stores",        icon: icons.store,     href: "/stores" },
+    { key: "pharmacy",  label: "Pharmacy",           icon: icons.pill,      href: "/pharmacy" },
+    { key: "lab",       label: "Lab",                icon: icons.flask,     href: "/lab" },
+    { key: "reports",   label: "Reports",            icon: icons.report,    href: "/reports/consumption" },
   ];
 
   if (loading) return (

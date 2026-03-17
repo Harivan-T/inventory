@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { neonDb as db } from "@/lib/db";
+import { db } from "@/lib/db";
 import { drugs, drugInventory } from "@/lib/db/schema";
 import { eq, count, sql, and } from "drizzle-orm";
 
-
 export async function GET() {
-  console.log("DB URL:", process.env.DATABASE_URL?.replace(/:[^:@]+@/, ':****@'))
   try {
     // Total drugs
     const [totalDrugs] = await db
@@ -53,21 +51,17 @@ export async function GET() {
       .where(eq(drugs.isactive, true))
       .orderBy(sql`${drugs.createdat} DESC`);
 
-// Inventory stats (if any)
-let inventoryStats: any[] = [];
-try {
-  inventoryStats = await db
-    .select({
-      drugid: drugInventory.drugid,
-      quantity: drugInventory.quantity,
-      minquantity: drugInventory.minquantity,
-      sellingprice: drugInventory.sellingprice,
-      expirydate: drugInventory.expirydate,
-    })
-    .from(drugInventory);
-} catch {
-  inventoryStats = [];
-}
+    // Inventory stats (if any)
+    const inventoryStats = await db
+      .select({
+        drugid: drugInventory.drugid,
+        quantity: drugInventory.quantity,
+        minquantity: drugInventory.minquantity,
+        sellingprice: drugInventory.sellingprice,
+        expirydate: drugInventory.expirydate,
+      })
+      .from(drugInventory);
+
     // Low stock alerts (quantity <= minquantity)
     const lowStock = inventoryStats.filter(
       (i) => i.minquantity !== null && i.quantity <= (i.minquantity ?? 0)
