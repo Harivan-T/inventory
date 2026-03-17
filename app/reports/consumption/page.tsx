@@ -71,9 +71,9 @@ export default function ConsumptionReportPage() {
   const setF = (k: string, v: string) => setFilters(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    fetch("/api/stores")
-      .then(r => r.json())
-      .then(d => setStores(d.stores ?? d ?? []))
+fetch("/api/stores")
+  .then(r => r.json())
+  .then(d => setStores(Array.isArray(d) ? d : (d.stores ?? [])))
       .catch(() => {});
     fetchData();
   }, []);
@@ -90,6 +90,7 @@ export default function ConsumptionReportPage() {
     try {
       const res  = await fetch(`/api/reports/consumption?${params}`);
       const data = await res.json();
+      setStores(Array.isArray(data) ? data : (data.stores ?? []));
       setRows(data.rows ?? []);
       setByPatient(data.byPatient ?? []);
     } catch {
