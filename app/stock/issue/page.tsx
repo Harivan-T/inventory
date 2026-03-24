@@ -26,23 +26,15 @@ export default function IssueStockPage() {
     itemid: "", warehouseid: "", batchid: "",
     quantity: "", departmentid: "", issuedby: "", notes: "",
   });
-
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/drugs"),
-      fetch("/api/warehouses"),
-      fetch("/api/stock/issue"),
-      fetch("/api/stock"),
-    ])
-      .then(([d, w, i, s]) => Promise.all([d.json(), w.json(), i.json(), s.json()]))
-      .then(([d, w, i, s]) => {
-        setDrugs(Array.isArray(d) ? d : []);
-        setWarehouses(Array.isArray(w) ? w : []);
-        setDepartments(Array.isArray(i.departments) ? i.departments : []);
-        setEmployees(Array.isArray(i.employees) ? i.employees : []);
-        setStock(Array.isArray(s) ? s : []);
-      });
-  }, []);
+useEffect(() => {
+  Promise.all([fetch("/api/items"), fetch("/api/warehouses"), fetch("/api/stock")])
+    .then(([d, w, s]) => Promise.all([d.json(), w.json(), s.json()]))
+    .then(([d, w, s]) => {
+      setDrugs(Array.isArray(d) ? d : []);
+      setWarehouses(Array.isArray(w) ? w : []);
+      setStock(Array.isArray(s) ? s : []);
+    });
+}, []);
 
   const availableBatches = stock.filter(s => s.itemid === form.itemid && s.warehouseid === form.warehouseid);
 
@@ -115,12 +107,12 @@ export default function IssueStockPage() {
 
         <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #f3f4f6", padding: "28px 32px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-            {select("Item", "itemid", true, drugs.map(d => ({ value: d.drugid, label: `${d.name}` })))}
+            {select("Item", "itemid", true, drugs.map(d => ({ value: d.id, label: `${d.name}` })))}
             {select("Warehouse", "warehouseid", true, warehouses.map(w => ({ value: w.id, label: w.name })))}
             {select("Batch", "batchid", false, availableBatches.map(b => ({ value: b.batchid ?? "", label: `${b.batchnumber ?? "No batch"} (Qty: ${b.quantity})` })))}
-            {input("Quantity", "quantity", "number", true)}
-            {select("Department", "departmentid", false, departments.map((d: any) => ({ value: d.id, label: d.name })))}
-            {select("Issued By", "issuedby", false, employees.map((e: any) => ({ value: e.id, label: e.name })))}
+           {select("Department", "departmentid", false, departments.map((d: any) => ({ value: d.id, label: d.name })))}
+            {input("Department", "departmentid")}
+            {input("Issued By", "issuedby")}
             <div style={{ gridColumn: "1/-1" }}>{input("Notes", "notes")}</div>
           </div>
 

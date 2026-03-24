@@ -24,12 +24,14 @@ export default function ReceiveStockPage() {
     manufacturedate: "", expirydate: "", quantity: "",
     notes: "", createdby: "",
   });
-
-  useEffect(() => {
-    Promise.all([fetch("/api/drugs"), fetch("/api/warehouses")])
-      .then(([d, w]) => Promise.all([d.json(), w.json()]))
-      .then(([d, w]) => { setDrugs(Array.isArray(d) ? d : []); setWarehouses(Array.isArray(w) ? w : []); });
-  }, []);
+useEffect(() => {
+  Promise.all([fetch("/api/items"), fetch("/api/warehouses")])
+    .then(([d, w]) => Promise.all([d.json(), w.json()]))
+    .then(([d, w]) => {
+      setDrugs(Array.isArray(d) ? d : []);
+      setWarehouses(Array.isArray(w) ? w : (w.warehouses ?? []));
+    });
+}, []);
 
   const showToast = (msg: string, type = "success") => {
     setToast({ msg, type });
@@ -95,7 +97,7 @@ export default function ReceiveStockPage() {
 
         <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #f3f4f6", padding: "28px 32px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-            {field("Item", "itemid", "text", true, drugs.map(d => ({ value: d.drugid, label: `${d.name} — ${d.genericname ?? ""}` })))}
+{field("Item", "itemid", "text", true, drugs.map(d => ({ value: d.id, label: `${d.name} (${d.itemtype})` })))}
             {field("Warehouse", "warehouseid", "text", true, warehouses.map(w => ({ value: w.id, label: w.name })))}
             {field("Batch Number", "batchnumber", "text", true)}
             {field("Quantity", "quantity", "number", true)}

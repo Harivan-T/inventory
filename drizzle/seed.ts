@@ -1,4 +1,17 @@
-import { db } from "@/lib/db";
+import * as dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
+
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "../lib/db/schema";
+
+const pool = new Pool({
+  connectionString: process.env.NEON_DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+const db = drizzle(pool, { schema }); // ✅ local db instance
+
 import {
   workspaces,
   drugCategories,

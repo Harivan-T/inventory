@@ -182,15 +182,20 @@ export const dispensingLog = pgTable("dispensing_log", {
 
 // ─── Warehouses ───────────────────────────────────────────────────────────────
 
+export const warehouseTypeEnum = pgEnum("warehouse_type", [
+  "hospital", "pharmacy", "lab", "radiology",
+]);
+
 export const warehouses = pgTable("warehouses", {
-  id:          uuid("id").primaryKey().defaultRandom(),
-  name:        text("name").notNull(),
-  location:    text("location"),
-  manager:     text("manager"),
-  description: text("description"),
-  isactive:    boolean("is_active").default(true),
-  createdat:   timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedat:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  id:              uuid("id").primaryKey().defaultRandom(),
+  name:            text("name").notNull(),
+  warehousetype:   warehouseTypeEnum("warehouse_type").default("hospital"),
+  location:        text("location"),
+  manager:         text("manager"),
+  description:     text("description"),
+  isactive:        boolean("is_active").default(true),
+  createdat:       timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedat:       timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
 // ─── Warehouse Sections ───────────────────────────────────────────────────────
@@ -200,6 +205,9 @@ export const warehouseSections = pgTable("warehouse_sections", {
   warehouseid:           uuid("warehouse_id").references(() => warehouses.id).notNull(),
   sectionname:           text("section_name").notNull(),
   sectiontype:           text("section_type"),
+  binlocation:           text("bin_location"),
+  shelf:                 text("shelf"),
+  description:           text("description"),
   temperaturecontrolled: boolean("temperature_controlled").default(false),
   createdat:             timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
@@ -468,6 +476,23 @@ export const labConsumptionLog = pgTable("lab_consumption_log", {
   runnotes:         text("run_notes"),
   createdby:        text("created_by"),
   createdat:        timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+
+// ─── Radiology Procedures ─────────────────────────────────────────────────────
+
+export const radiologyProcedures = pgTable("radiology_procedures", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  storeid:       uuid("store_id").references(() => stores.id).notNull(),
+  itemid:        uuid("item_id").references(() => items.id).notNull(),
+  batchid:       uuid("batch_id").references(() => itemBatches.id),
+  procedurename: text("procedure_name").notNull(),
+  proceduretype: text("procedure_type"),
+  patientref:    text("patient_ref"),
+  quantityused:  decimal("quantity_used", { precision: 10, scale: 4 }).notNull(),
+  performedby:   text("performed_by"),
+  notes:         text("notes"),
+  createdat:     timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 // ─── Relations ────────────────────────────────────────────────────────────────

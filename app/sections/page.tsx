@@ -34,9 +34,11 @@ function AddSectionModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetch("/api/warehouses").then(r => r.json()).then(setWarehouses);
-  }, []);
+useEffect(() => {
+  fetch("/api/warehouses")
+    .then(r => r.json())
+    .then(d => setWarehouses(Array.isArray(d) ? d : (d.warehouses ?? [])));
+}, []);
 
   const handleSave = async () => {
     if (!form.warehouseid || !form.sectionname.trim()) { setError("Warehouse and section name are required"); return; }

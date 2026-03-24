@@ -17,7 +17,7 @@ export default function AdjustmentPage() {
   const [form, setForm] = useState({ itemid: "", warehouseid: "", batchid: "", adjustmentquantity: "", reason: "", createdby: "" });
 
   useEffect(() => {
-    Promise.all([fetch("/api/drugs"), fetch("/api/warehouses"), fetch("/api/stock")])
+    Promise.all([fetch("/api/items"), fetch("/api/warehouses"), fetch("/api/stock")])
       .then(([d, w, s]) => Promise.all([d.json(), w.json(), s.json()]))
       .then(([d, w, s]) => { setDrugs(Array.isArray(d) ? d : []); setWarehouses(Array.isArray(w) ? w : []); setStock(Array.isArray(s) ? s : []); });
   }, []);
@@ -71,7 +71,7 @@ export default function AdjustmentPage() {
         </div>
         <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #f3f4f6", padding: "28px 32px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-            {sel("Item", "itemid", true, drugs.map(d => ({ value: d.drugid, label: d.name })))}
+            {sel("Item", "itemid", true, drugs.map(d => ({ value: d.id, label: d.name })))}
             {sel("Warehouse", "warehouseid", true, warehouses.map(w => ({ value: w.id, label: w.name })))}
             {sel("Batch", "batchid", false, availableBatches.map(b => ({ value: b.batchid ?? "", label: `${b.batchnumber ?? "No batch"} (Qty: ${b.quantity})` })))}
             {inp("Adjustment Quantity", "adjustmentquantity", "number", true, "Use negative number to reduce (e.g. -50)")}
