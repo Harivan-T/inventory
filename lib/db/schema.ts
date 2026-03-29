@@ -495,6 +495,141 @@ export const radiologyProcedures = pgTable("radiology_procedures", {
   createdat:     timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+
+// ─── Phase 2: Procurement ─────────────────────────────────────────────────────
+
+export const prStatusEnum = pgEnum("pr_status", [
+  "draft", "pending", "approved", "rejected", "converted",
+]);
+
+export const poStatusEnum = pgEnum("po_status", [
+  "draft", "approved", "sent", "partial", "complete", "cancelled",
+]);
+
+export const grnStatusEnum = pgEnum("grn_status", [
+  "draft", "confirmed", "posted",
+]);
+
+export const vendors = pgTable("vendors", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  name:         text("name").notNull(),
+  code:         text("code"),
+  contactname:  text("contactname"),
+  phone:        text("phone"),
+  email:        text("email"),
+  address:      text("address"),
+  country:      text("country"),
+  paymentterms: integer("paymentterms").default(30),
+  currency:     text("currency").default("USD"),
+  taxnumber:    text("taxnumber"),
+  rating:       integer("rating").default(0),
+  isactive:     boolean("isactive").default(true),
+  notes:        text("notes"),
+  createdat:    timestamp("createdat", { withTimezone: true }).defaultNow(),
+  updatedat:    timestamp("updatedat", { withTimezone: true }).defaultNow(),
+});
+
+export const vendorContracts = pgTable("vendor_contracts", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  vendorid:     uuid("vendorid").references(() => vendors.id),
+  itemid:       uuid("itemid").references(() => items.id),
+  unitprice:    decimal("unitprice", { precision: 10, scale: 4 }).notNull(),
+  currency:     text("currency").default("USD"),
+  minorderqty:  integer("minorderqty").default(1),
+  leadtimedays: integer("leadtimedays").default(7),
+  validfrom:    timestamp("validfrom", { withTimezone: true }),
+  validto:      timestamp("validto", { withTimezone: true }),
+  isactive:     boolean("isactive").default(true),
+  createdat:    timestamp("createdat", { withTimezone: true }).defaultNow(),
+});
+
+export const purchaseRequisitions = pgTable("purchase_requisitions", {
+  id:           uuid("id").primaryKey().defaultRandom(),
+  prnumber:     text("prnumber").notNull(),
+  warehouseid:  uuid("warehouseid").references(() => warehouses.id),
+  requestedby:  text("requestedby"),
+  approvedby:   text("approvedby"),
+  status:       prStatusEnum("status").default("draft"),
+  priority:     text("priority").default("normal"),
+  requireddate: timestamp("requiredddate", { withTimezone: true }),
+  notes:        text("notes"),
+  createdat:    timestamp("createdat", { withTimezone: true }).defaultNow(),
+  updatedat:    timestamp("updatedat", { withTimezone: true }).defaultNow(),
+});
+
+export const purchaseRequisitionItems = pgTable("purchase_requisition_items", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  prid:           uuid("prid").references(() => purchaseRequisitions.id),
+  itemid:         uuid("itemid").references(() => items.id),
+  requestedqty:   integer("requestedqty").notNull(),
+  approvedqty:    integer("approvedqty"),
+  estimatedprice: decimal("estimatedprice", { precision: 10, scale: 4 }),
+  notes:          text("notes"),
+  createdat:      timestamp("createdat", { withTimezone: true }).defaultNow(),
+});
+
+export const purchaseOrders = pgTable("purchase_orders", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  ponumber:        text("ponumber").notNull(),
+  vendorid:        uuid("vendorid").references(() => vendors.id),
+  prid:            uuid("prid").references(() => purchaseRequisitions.id),
+  warehouseid:     uuid("warehouseid").references(() => warehouses.id),
+  status:          poStatusEnum("status").default("draft"),
+  orderdate:       timestamp("orderdate", { withTimezone: true }).defaultNow(),
+  expecteddate:    timestamp("expecteddate", { withTimezone: true }),
+  totalamount:     decimal("totalamount", { precision: 12, scale: 4 }).default("0"),
+  currency:        text("currency").default("USD"),
+  paymentterms:    integer("paymentterms").default(30),
+  shippingaddress: text("shippingaddress"),
+  notes:           text("notes"),
+  approvedby:      text("approvedby"),
+  sentby:          text("sentby"),
+  createdat:       timestamp("createdat", { withTimezone: true }).defaultNow(),
+  updatedat:       timestamp("updatedat", { withTimezone: true }).defaultNow(),
+});
+
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  poid:        uuid("poid").references(() => purchaseOrders.id),
+  itemid:      uuid("itemid").references(() => items.id),
+  orderedqty:  integer("orderedqty").notNull(),
+  receivedqty: integer("receivedqty").default(0),
+  unitprice:   decimal("unitprice", { precision: 10, scale: 4 }).notNull(),
+  totalamount: decimal("totalamount", { precision: 12, scale: 4 }),
+  createdat:   timestamp("createdat", { withTimezone: true }).defaultNow(),
+});
+
+export const goodsReceiptNotes = pgTable("goods_receipt_notes", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  grnnumber:     text("grnnumber").notNull(),
+  poid:          uuid("poid").references(() => purchaseOrders.id),
+  vendorid:      uuid("vendorid").references(() => vendors.id),
+  warehouseid:   uuid("warehouseid").references(() => warehouses.id),
+  status:        grnStatusEnum("status").default("draft"),
+  receiptdate:   timestamp("receiptdate", { withTimezone: true }).defaultNow(),
+  invoicenumber: text("invoicenumber"),
+  invoicedate:   timestamp("invoicedate", { withTimezone: true }),
+  receivedby:    text("receivedby"),
+  notes:         text("notes"),
+  createdat:     timestamp("createdat", { withTimezone: true }).defaultNow(),
+  updatedat:     timestamp("updatedat", { withTimezone: true }).defaultNow(),
+});
+
+export const grnItems = pgTable("grn_items", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  grnid:           uuid("grnid").references(() => goodsReceiptNotes.id),
+  itemid:          uuid("itemid").references(() => items.id),
+  poitemid:        uuid("poitemid").references(() => purchaseOrderItems.id),
+  orderedqty:      integer("orderedqty"),
+  receivedqty:     integer("receivedqty").notNull(),
+  rejectedqty:     integer("rejectedqty").default(0),
+  unitprice:       decimal("unitprice", { precision: 10, scale: 4 }),
+  batchnumber:     text("batchnumber"),
+  expirydate:      timestamp("expirydate", { withTimezone: true }),
+  manufacturedate: timestamp("manufacturedate", { withTimezone: true }),
+  notes:           text("notes"),
+  createdat:       timestamp("createdat", { withTimezone: true }).defaultNow(),
+});
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const drugsRelations = relations(drugs, ({ one, many }) => ({

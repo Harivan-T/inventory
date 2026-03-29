@@ -251,12 +251,20 @@ export default function Dashboard() {
   const displayDrugs = search.trim() ? searchResults : (data?.allDrugs ?? []);
 
   const navItems = [
-    { key: "overview", label: "Overview", icon: icons.home, href: null },
-    { key: "drugs", label: "Drug Inventory", icon: icons.pill, href: null },
-    { key: "warehouses", label: "Warehouses", icon: icons.warehouse, href: "/warehouses" },
-    { key: "sections", label: "Sections", icon: icons.layers, href: "/sections" },
-    { key: "stock", label: "Stock Management", icon: icons.box, href: "/stock" },
-  ];
+  { key: "overview",    label: "Overview",          icon: icons.home,      href: null },
+  { key: "drugs",       label: "Drug Inventory",     icon: icons.pill,      href: null },
+  { key: "warehouses",  label: "Warehouses",         icon: icons.warehouse, href: "/warehouses" },
+  { key: "sections",    label: "Sections",           icon: icons.layers,    href: "/sections" },
+  { key: "stock",       label: "Stock Management",   icon: icons.box,       href: "/stock" },
+  { key: "items",       label: "Item Master",        icon: icons.box,       href: "/items" },
+  { key: "stores",      label: "Dept Stores",        icon: icons.layers,    href: "/stores" },
+  { key: "pharmacy",    label: "Pharmacy",           icon: icons.pill,      href: "/pharmacy" },
+  { key: "lab",         label: "Lab",                icon: icons.layers,    href: "/lab" },
+  { key: "radiology",   label: "Radiology",          icon: icons.layers,    href: "/radiology" },
+  { key: "procurement", label: "Procurement",        icon: icons.box,       href: "/procurement" },
+  { key: "vendors",     label: "Vendors",            icon: icons.users,     href: "/vendors" },
+  { key: "reports",     label: "Reports",            icon: icons.activity,  href: "/reports/consumption" },
+];
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
