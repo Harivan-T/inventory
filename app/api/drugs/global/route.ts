@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from "next/server";
+import { Pool } from "pg";
+
+// Read-only connection to the global drug database
+const globalPool = new Pool({
+  connectionString: process.env.GLOBAL_DRUG_DB_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 3,
+});
+
+export async function GET(req: NextRequest) {
+  try {
+    const search = req.nextUrl.searchParams.get("search")?.trim();
+    if (!search || search.length < 2) {
+      return NextResponse.json([]);
+    }
+
+    const result = await globalPool.query(
+      `SELECT
+        drugid,
+        name,
+        genericname,
+        atccode,
+        nationalcode,
+        form,
+        strength,
+        unit,
+        manufacturer,
+        description,
+        indication,
+        interaction,
+        warning,
+        sideeffect,
+        storagetype,
+        traffic,
+        pregnancy,
+        requiresprescription,
+        isactive
+      FROM drugs
+      WHERE
+        isactive = true
+        AND (
+          name ILIKE $1
+          OR genericname ILIKE $1
+          OR atccode ILIKE $1
+          OR nationalcode ILIKE $1
+        )
+      ORDER BY
+        CASE WHEN name ILIKE $2 THEN 0 ELSE 1 END,
+        name
+      LIMIT 20`,
+      [`%${search}%`, `${search}%`]
+    );
+
+    return NextResponse.json(result.rows);
+  } catch (err: any) {
+    console.error("Global drug search error:", err.message);
+    return NextResponse.json({ error: "Failed to search drug database" }, { status: 500 });
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface WizardForm {
@@ -152,12 +152,28 @@ function PreviewBar({ form }: { form: WizardForm }) {
 }
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
-export function AddDrugWizard({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+export function AddDrugWizard({ onClose, onSuccess, prefillData }: { onClose: () => void; onSuccess: () => void; prefillData?: any }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardForm>(INITIAL_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof WizardForm, string>>>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
+
+  // Auto-fill from global drug DB import
+  useEffect(() => {
+    if (!prefillData) return;
+    setForm(f => ({
+      ...f,
+      name:                prefillData.name                ?? f.name,
+      genericname:         prefillData.genericname         ?? f.genericname,
+      dosageform:          prefillData.form                ?? f.dosageform,
+      strength:            prefillData.strength            ?? f.strength,
+      atccode:             prefillData.atccode             ?? f.atccode,
+      manufacturer:        prefillData.manufacturer        ?? f.manufacturer,
+      requiresprescription: prefillData.requiresprescription ?? f.requiresprescription,
+      pregnancycategory:   prefillData.pregnancy           ?? f.pregnancycategory,
+    }));
+  }, [prefillData]);
 
   const set = (key: keyof WizardForm, value: string | boolean) =>
     setForm(f => ({ ...f, [key]: value }));

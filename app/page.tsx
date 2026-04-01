@@ -1,5 +1,6 @@
 "use client";
 import { AddDrugWizard } from "@/components/AddDrugWizard";
+import { ImportDrugModal } from "@/components/ImportDrugModal";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -199,6 +200,8 @@ export default function Dashboard() {
   const [searching, setSearching] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [prefillData, setPrefillData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "drugs">("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
@@ -250,7 +253,7 @@ export default function Dashboard() {
 
   const displayDrugs = search.trim() ? searchResults : (data?.allDrugs ?? []);
 
-  const navItems = [
+const navItems = [
   { key: "overview",    label: "Overview",          icon: icons.home,      href: null },
   { key: "drugs",       label: "Drug Inventory",     icon: icons.pill,      href: null },
   { key: "warehouses",  label: "Warehouses",         icon: icons.warehouse, href: "/warehouses" },
@@ -406,11 +409,18 @@ export default function Dashboard() {
             )}
           </div>
 
-          <button onClick={() => setShowAddModal(true)}
-            style={{ display: "flex", alignItems: "center", gap: 6, background: "#2563eb", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            <Icon d={icons.plus} size={15} color="#fff" />
-            Add Drug
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowImportModal(true)}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <Icon d={icons.activity} size={15} color="#16a34a" />
+              Import from DB
+            </button>
+            <button onClick={() => { setPrefillData(null); setShowAddModal(true); }}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "#2563eb", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <Icon d={icons.plus} size={15} color="#fff" />
+              Add Drug
+            </button>
+          </div>
         </header>
 
         {/* ── Content */}
@@ -610,10 +620,22 @@ export default function Dashboard() {
         </main>
       </div>
 
+      {showImportModal && (
+        <ImportDrugModal
+          onClose={() => setShowImportModal(false)}
+          onImport={(drug) => {
+            setPrefillData(drug);
+            setShowImportModal(false);
+            setShowAddModal(true);
+          }}
+        />
+      )}
+
       {showAddModal && (
         <AddDrugWizard
-          onClose={() => setShowAddModal(false)}
-          onSuccess={() => { fetchDashboard(); showToast("Drug added successfully!"); setActiveTab("drugs"); }}
+          onClose={() => { setShowAddModal(false); setPrefillData(null); }}
+          onSuccess={() => { fetchDashboard(); showToast("Drug added successfully!"); setActiveTab("drugs"); setPrefillData(null); }}
+          prefillData={prefillData}
         />
       )}
 
