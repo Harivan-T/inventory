@@ -1,5 +1,11 @@
 import pg from "pg";
 const p = new pg.Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
-const r = await p.query("SELECT column_name FROM information_schema.columns WHERE table_name='warehouse_sections' ORDER BY ordinal_position");
-console.log('warehouse_sections:', r.rows.map(x => x.column_name));
+const r1 = await p.query(`SELECT column_name FROM information_schema.columns WHERE table_name='drugs' ORDER BY ordinal_position`);
+console.log('drugs:', r1.rows.map(x => x.column_name));
+const r2 = await p.query(`SELECT column_name FROM information_schema.columns WHERE table_name='items' ORDER BY ordinal_position`);
+console.log('items:', r2.rows.map(x => x.column_name));
+const r3 = await p.query(`SELECT column_name FROM information_schema.columns WHERE table_name='inventory_stock' ORDER BY ordinal_position`);
+console.log('inventory_stock:', r3.rows.map(x => x.column_name));
+const r4 = await p.query(`SELECT COUNT(*) FROM items WHERE drug_id IS NOT NULL`);
+console.log('items with drug_id:', r4.rows[0].count);
 p.end();

@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { ImportDrugModal } from "@/components/ImportDrugModal";
+import { AddDrugToPharmacyWizard } from "@/components/AddDrugToPharmacyWizard";
+
 
 const Icon = ({ d, size = 16, color = "currentColor" }: { d: string; size?: number; color?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -384,7 +386,9 @@ const [selectedOrder, setSelectedOrder] = useState<any>(null);
 const [orderItems, setOrderItems]       = useState<any[]>([]);
 const [orderItemsLoading, setOrderItemsLoading] = useState(false);
 const [dispensingOrder, setDispensingOrder] = useState(false);
-  const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
+const [showAddDrug, setShowAddDrug] = useState(false);
+const [drugPrefill, setDrugPrefill] = useState<any>(null);
+const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -605,9 +609,10 @@ const [dispensingOrder, setDispensingOrder] = useState(false);
         <div style={{width:1,height:20,background:"#e5e7eb"}}/>
         <div style={{width:32,height:32,background:"#ede9fe",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon d={icons.pill} size={16} color="#6366f1"/></div>
         <span style={{fontSize:14,fontWeight:700,color:"#111827"}}>Pharmacy Inventory</span>
-        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+    <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={fetchAll} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}><Icon d={icons.refresh} size={13} color="#374151"/></button>
-          <button onClick={()=>setShowImportModal(true)} style={{...s.btn("ghost"),border:"1px solid #bbf7d0",color:"#16a34a",background:"#f0fdf4",display:"flex",alignItems:"center",gap:6}}><Icon d={icons.import} size={13} color="#16a34a"/> Import from DB</button>
+          <button onClick={()=>setShowImportModal(true)} style={{...s.btn("ghost"),border:"1px solid #bbf7d0",color:"#16a34a",background:"#f0fdf4",display:"flex",alignItems:"center",gap:6}}><Icon d={icons.import} size={13} color="#16a34a"/> Import Drug from DB</button>
+          <button onClick={()=>setShowAddDrug(true)} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:6}}><Icon d={icons.pill} size={13} color="#6366f1"/> Add Drug</button>
           <button onClick={()=>setShowAddItem(true)} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.plus} size={13} color="#fff"/> Add Item</button>
         </div>
       </div>
@@ -1489,7 +1494,8 @@ const [dispensingOrder, setDispensingOrder] = useState(false);
       {editItem&&<ItemModal item={editItem} warehouses={pharmaWh} onClose={()=>setEditItem(null)} onSuccess={()=>{fetchAll();showToast("Item updated!");}}/>}
       {deleteItem&&<ConfirmModal item={deleteItem} onClose={()=>setDeleteItem(null)} onSuccess={()=>{fetchAll();showToast("Item deactivated");}}/>}
       {batchItem&&<BatchModal item={batchItem} onClose={()=>setBatchItem(null)}/>}
-      {showImportModal&&<ImportDrugModal onClose={()=>setShowImportModal(false)} onImport={()=>{setShowImportModal(false);setShowAddItem(true);}}/>}
+      {showImportModal&&<ImportDrugModal onClose={()=>setShowImportModal(false)} onImport={(drug:any)=>{setDrugPrefill(drug);setShowImportModal(false);setShowAddDrug(true);}}/>}
+    {showAddDrug&&<AddDrugToPharmacyWizard warehouses={pharmaWh} prefill={drugPrefill} onClose={()=>{setShowAddDrug(false);setDrugPrefill(null);}} onSuccess={()=>{fetchAll();showToast("Drug added to pharmacy!");setShowAddDrug(false);setDrugPrefill(null);}}/>}
       {toast&&<div style={{position:"fixed",bottom:24,right:24,background:"#16a34a",color:"#fff",padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:2000}}>✓ {toast}</div>}
     </div>
   );
