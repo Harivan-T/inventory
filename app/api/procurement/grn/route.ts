@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import {
-  goodsReceiptNotes, grnItems, purchaseOrderItems,
-  vendors, warehouses, items,
-  inventoryStock, itemBatches, stockTransactions,
-} from "@/lib/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { Pool } from "pg";
+const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
-export async function GET(req: NextRequest) {
-  try {
-    const rows = await db
-      .select({
-        id:            goodsReceiptNotes.id,
-        grnnumber:     goodsReceiptNotes.grnnumber,
-        status:        goodsReceiptNotes.status,
-        receiptdate:   goodsReceiptNotes.receiptdate,
-        invoicenumber: goodsReceiptNotes.invoicenumber,
-        receivedby:    goodsReceiptNotes.receivedby,
-        notes:         goodsReceiptNotes.notes,
-        createdat:     goodsReceiptNotes.createdat,
-        vendorname:    vendors.name,
-        warehousename: warehouses.name,
-      })
-      .from(goodsReceiptNotes)
-      .leftJoin(vendors,    eq(goodsReceiptNotes.vendorid,    vendors.id))
-      .leftJoin(warehouses, eq(goodsReceiptNotes.warehouseid, warehouses.id))
-      .orderBy(desc(goodsReceiptNotes.createdat));
-    return NextResponse.json(rows);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+export async function GET() {
+  const r = await pool.query(
+    `SELECT g.*, v.name AS "vendorName", w.name AS "warehouseName"
+     FROM goods_receipt_notes g
+     LEFT JOIN vendors v ON v.id::text = g.vendorid::text
+     LEFT JOIN warehouses w ON w.id = g.warehouseid
+     ORDER BY g.createdat DESC`
+  );
+  return NextResponse.json(r.rows);
 }

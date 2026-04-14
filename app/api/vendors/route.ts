@@ -1,62 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { vendors } from "@/lib/db/schema";
-import { eq, ilike, or } from "drizzle-orm";
+import { Pool } from "pg";
+const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
 export async function GET(req: NextRequest) {
-  try {
-    const search = req.nextUrl.searchParams.get("search") ?? "";
-    const rows = await db
-      .select()
-      .from(vendors)
-      .where(
-        search
-          ? or(ilike(vendors.name, `%${search}%`), ilike(vendors.email, `%${search}%`))
-          : eq(vendors.isactive, true)
-      )
-      .orderBy(vendors.name);
-    return NextResponse.json(rows);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  const search = req.nextUrl.searchParams.get("search") ?? "";
+  const r = await pool.query(
+    `SELECT * FROM vendors
+     WHERE isactive = true
+       AND ($1 = '' OR name ILIKE $1 OR contactname ILIKE $1 OR email ILIKE $1 OR code ILIKE $1)
+     ORDER BY name`,
+    [`%${search}%`]
+  );
+  return NextResponse.json(r.rows);
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { name, code, contactname, phone, email, address, country, paymentterms, currency, taxnumber, notes } = body;
-    if (!name?.trim()) return NextResponse.json({ error: "Vendor name is required" }, { status: 400 });
-    const [created] = await db.insert(vendors).values({
-      name, code, contactname, phone, email, address, country,
-      paymentterms: paymentterms ?? 30,
-      currency: currency ?? "USD",
-      taxnumber, notes,
-    }).returning();
-    return NextResponse.json(created, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-
-export async function PATCH(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { id, ...updates } = body;
-    if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    const [updated] = await db.update(vendors).set({ ...updates, updatedat: new Date() }).where(eq(vendors.id, id)).returning();
-    return NextResponse.json(updated);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const id = req.nextUrl.searchParams.get("id");
-    if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    await db.update(vendors).set({ isactive: false }).where(eq(vendors.id, id));
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  const { name, code, contactname, phone, email, address, country, paymentterms, currency, notes } = await req.json();
+  if (!name?.trim()) return NextResponse.json({ error:"Name required" }, { status:400 });
+  const r = await pool.query(
+    `INSERT INTO vendors (id, name, code, contactname, phone, email, address, country, paymentterms, currency, notes, isactive, createdat, updatedat)
+     VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,NOW(),NOW()) RETURNING *`,
+    [name, code||null, contactname||null, phone||null, email||null, address||null, country||null, paymentterms||null, currency||"USD", notes||null]
+  );
+  return NextResponse.json(r.rows[0]);
 }

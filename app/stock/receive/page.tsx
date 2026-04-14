@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const Icon = ({ d, size = 20, color = "currentColor" }: { d: string; size?: number; color?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -13,8 +13,10 @@ const icons = {
   x:     "M18 6L6 18M6 6l12 12",
 };
 
-export default function ReceiveStockPage() {
+function ReceiveStockPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const backTo = searchParams.get("from") ?? "/stock";
   const [drugs, setDrugs] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -24,14 +26,12 @@ export default function ReceiveStockPage() {
     manufacturedate: "", expirydate: "", quantity: "",
     notes: "", createdby: "",
   });
-useEffect(() => {
-  Promise.all([fetch("/api/items"), fetch("/api/warehouses")])
-    .then(([d, w]) => Promise.all([d.json(), w.json()]))
-    .then(([d, w]) => {
-      setDrugs(Array.isArray(d) ? d : []);
-      setWarehouses(Array.isArray(w) ? w : (w.warehouses ?? []));
-    });
-}, []);
+
+  useEffect(() => {
+    Promise.all([fetch("/api/drugs"), fetch("/api/warehouses")])
+      .then(([d, w]) => Promise.all([d.json(), w.json()]))
+      .then(([d, w]) => { setDrugs(Array.isArray(d) ? d : []); setWarehouses(Array.isArray(w) ? w : []); });
+  }, []);
 
   const showToast = (msg: string, type = "success") => {
     setToast({ msg, type });
@@ -80,10 +80,10 @@ useEffect(() => {
 
       {/* Header */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 32px", height: 64, display: "flex", alignItems: "center", gap: 16, position: "sticky", top: 0, zIndex: 100 }}>
-        <button onClick={() => router.push("/stock")}
+        <button onClick={() => router.push(backTo)}
           style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", color: "#6b7280", fontSize: 13, fontWeight: 500 }}>
           <Icon d={icons.back} size={16} color="#6b7280" />
-          Back to Stock
+          Back
         </button>
         <div style={{ width: 1, height: 20, background: "#e5e7eb" }} />
         <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>Receive Stock</div>
@@ -97,7 +97,7 @@ useEffect(() => {
 
         <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #f3f4f6", padding: "28px 32px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-{field("Item", "itemid", "text", true, drugs.map(d => ({ value: d.id, label: `${d.name} (${d.itemtype})` })))}
+            {field("Item", "itemid", "text", true, drugs.map(d => ({ value: d.drugid, label: `${d.name} — ${d.genericname ?? ""}` })))}
             {field("Warehouse", "warehouseid", "text", true, warehouses.map(w => ({ value: w.id, label: w.name })))}
             {field("Batch Number", "batchnumber", "text", true)}
             {field("Quantity", "quantity", "number", true)}
@@ -127,5 +127,13 @@ useEffect(() => {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ReceiveStockPage() {
+  return (
+    <Suspense fallback={<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,sans-serif",color:"#6b7280"}}>Loading...</div>}>
+      <ReceiveStockPageInner />
+    </Suspense>
   );
 }

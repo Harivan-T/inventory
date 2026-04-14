@@ -1,6 +1,5 @@
 "use client";
 import { AddDrugWizard } from "@/components/AddDrugWizard";
-import { ImportDrugModal } from "@/components/ImportDrugModal";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -200,8 +199,7 @@ export default function Dashboard() {
   const [searching, setSearching] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [prefillData, setPrefillData] = useState<any>(null);
+  const [editDrug, setEditDrug] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "drugs">("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
@@ -253,20 +251,20 @@ export default function Dashboard() {
 
   const displayDrugs = search.trim() ? searchResults : (data?.allDrugs ?? []);
 
-const navItems = [
-  { key: "overview",    label: "Overview",          icon: icons.home,      href: null },
-  { key: "drugs",       label: "Drug Inventory",     icon: icons.pill,      href: null },
-  { key: "warehouses",  label: "Warehouses",         icon: icons.warehouse, href: "/warehouses" },
-  { key: "sections",    label: "Sections",           icon: icons.layers,    href: "/sections" },
-  // { key: "stock",       label: "Stock Management",   icon: icons.box,       href: "/stock" },
-  { key: "items",       label: "Item Master",        icon: icons.box,       href: "/items" },
-  { key: "stores",      label: "Dept Stores",        icon: icons.layers,    href: "/stores" },
-  { key: "pharmacy",    label: "Pharmacy",           icon: icons.pill,      href: "/pharmacy" },
-  { key: "lab",         label: "Lab",                icon: icons.layers,    href: "/lab" },
-  // { key: "radiology",   label: "Radiology",          icon: icons.layers,    href: "/radiology" },
-  { key: "procurement", label: "Procurement",        icon: icons.box,       href: "/procurement" },
-  { key: "vendors",     label: "Vendors",            icon: icons.users,     href: "/vendors" },
-  { key: "reports",     label: "Reports",            icon: icons.activity,  href: "/reports/consumption" },
+  const navItems = [
+  { key: "overview",    label: "Overview",           icon: icons.home,      href: null },
+  { key: "drugs",       label: "Drug Inventory",      icon: icons.pill,      href: null },
+  { key: "warehouses",  label: "Warehouses",          icon: icons.warehouse, href: "/warehouses" },
+  { key: "sections",    label: "Sections",            icon: icons.layers,    href: "/sections" },
+  { key: "items",       label: "Item Master",         icon: icons.box,       href: "/items" },
+  { key: "pharmacy",    label: "Pharmacy",            icon: icons.pill,      href: "/pharmacy" },
+  { key: "lab",         label: "Lab",                 icon: icons.layers,    href: "/lab" },
+  { key: "hospital",    label: "Hospital Inventory",  icon: icons.warehouse, href: "/hospital" },
+  { key: "stores",      label: "Dept Stores",         icon: icons.layers,    href: "/stores" },
+  { key: "procurement", label: "Procurement",         icon: icons.box,       href: "/procurement" },
+  { key: "vendors",     label: "Vendors",             icon: icons.users,     href: "/vendors" },
+  { key: "reports",     label: "Reports",             icon: icons.activity,  href: "/reports/consumption" },
+  { key: "uom",         label: "UOM Conversions",     icon: icons.layers,    href: "/uom" },
 ];
 
   if (loading) return (
@@ -307,7 +305,7 @@ const navItems = [
                 <Icon d={icons.pill} size={18} color="#fff" />
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>PharmaDash</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Tibbna</div>
                 <div style={{ fontSize: 11, color: "#6b7280" }}>Inventory System</div>
               </div>
             </div>
@@ -409,18 +407,11 @@ const navItems = [
             )}
           </div>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setShowImportModal(true)}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              <Icon d={icons.activity} size={15} color="#16a34a" />
-              Import from DB
-            </button>
-            <button onClick={() => { setPrefillData(null); setShowAddModal(true); }}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "#2563eb", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              <Icon d={icons.plus} size={15} color="#fff" />
-              Add Drug
-            </button>
-          </div>
+          <button onClick={() => setShowAddModal(true)}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "#2563eb", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            <Icon d={icons.plus} size={15} color="#fff" />
+            Add Drug
+          </button>
         </header>
 
         {/* ── Content */}
@@ -604,6 +595,14 @@ const navItems = [
                           </td>
                           <td style={{ padding: "12px 16px", fontSize: 12, color: "#9ca3af", fontFamily: "monospace" }}>{drug.barcode ?? "—"}</td>
                           <td style={{ padding: "12px 16px" }}>
+                            <button onClick={() => { setEditDrug(drug); setShowAddModal(true); }} className="action-btn"
+                              style={{ background: "#eff6ff", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", display: "inline-flex", marginRight: 4 }}>
+                              <Icon d={icons.edit} size={13} color="#2563eb" />
+                            </button>
+                            <button onClick={() => { setEditDrug(drug); setShowAddModal(true); }} className="action-btn"
+                              style={{ background: "#eff6ff", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", display: "inline-flex", marginRight: 4 }}>
+                              <Icon d={icons.edit} size={13} color="#2563eb" />
+                            </button>
                             <button onClick={() => handleDelete(drug.drugid, drug.name)} className="action-btn"
                               style={{ background: "#fef2f2", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", display: "inline-flex" }}>
                               <Icon d={icons.trash} size={13} color="#dc2626" />
@@ -620,22 +619,10 @@ const navItems = [
         </main>
       </div>
 
-      {showImportModal && (
-        <ImportDrugModal
-          onClose={() => setShowImportModal(false)}
-          onImport={(drug) => {
-            setPrefillData(drug);
-            setShowImportModal(false);
-            setShowAddModal(true);
-          }}
-        />
-      )}
-
       {showAddModal && (
         <AddDrugWizard
-          onClose={() => { setShowAddModal(false); setPrefillData(null); }}
-          onSuccess={() => { fetchDashboard(); showToast("Drug added successfully!"); setActiveTab("drugs"); setPrefillData(null); }}
-          prefillData={prefillData}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => { fetchDashboard(); showToast("Drug added successfully!"); setActiveTab("drugs"); }}
         />
       )}
 

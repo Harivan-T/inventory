@@ -3,316 +3,259 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 
 const Icon = ({ d, size = 16, color = "currentColor" }: { d: string; size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
-    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d={d} />
-  </svg>
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>
 );
-
 const icons = {
-  back:    "M19 12H5M12 5l-7 7 7 7",
-  search:  "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
-  user:    "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z",
-  pill:    "M10.5 6h3M7 12h10M7 16h10M4 4l16 16",
-  flask:   "M9 3h6l1 7H8L9 3zM5 21h14a1 1 0 001-1 7 7 0 00-3.48-6.07L15 10H9l-1.52 3.93A7 7 0 005 20a1 1 0 001 1z",
-  filter:  "M22 3H2l8 9.46V19l4 2v-8.54L22 3z",
-  download:"M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3",
-  refresh: "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
+  back:     "M19 12H5M12 5l-7 7 7 7",
+  refresh:  "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
+  download: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3",
+  activity: "M22 12h-4l-3 9L9 3l-3 9H2",
+  box:      "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
+  warning:  "M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01",
+  file:     "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6",
 };
 
-const TX_COLORS: Record<string, { bg: string; color: string }> = {
-  DISPENSE:        { bg: "#dbeafe", color: "#1d4ed8" },
-  LAB_CONSUMPTION: { bg: "#ede9fe", color: "#6d28d9" },
-  default:         { bg: "#f3f4f6", color: "#374151" },
+const s: Record<string,any> = {
+  page:    { fontFamily:"Inter,sans-serif", minHeight:"100vh", background:"#f8f9fa", color:"#111827" },
+  header:  { background:"#fff", borderBottom:"1px solid #e5e7eb", padding:"0 24px", height:56, display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:10 },
+  content: { padding:24, maxWidth:1400, margin:"0 auto" },
+  card:    { background:"#fff", borderRadius:10, border:"1px solid #e5e7eb", overflow:"hidden", marginBottom:16 },
+  th:      { padding:"10px 14px", textAlign:"left" as const, fontSize:11, fontWeight:700, color:"#6b7280", textTransform:"uppercase" as const, background:"#f9fafb", borderBottom:"1px solid #e5e7eb", whiteSpace:"nowrap" as const },
+  td:      { padding:"10px 14px", borderBottom:"1px solid #f9fafb", fontSize:13, color:"#111827" },
+  btn:     (c:string) => ({ padding:"7px 14px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", border:"none", background:c==="purple"?"#6366f1":c==="green"?"#16a34a":"#f3f4f6", color:c==="ghost"?"#374151":"#fff" }),
+  input:   { padding:"8px 10px", borderRadius:8, border:"1px solid #d1d5db", fontSize:13, color:"#111827" },
+  tab:     (a:boolean) => ({ padding:"10px 20px", fontSize:13, fontWeight:500, border:"none", background:"none", cursor:"pointer", borderBottom:a?"2px solid #6366f1":"2px solid transparent", color:a?"#6366f1":"#6b7280" }),
 };
 
-function Badge({ label, bg, color }: { label: string; bg: string; color: string }) {
-  return (
-    <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20,
-      background: bg, color, display: "inline-block", whiteSpace: "nowrap" }}>
-      {label}
-    </span>
-  );
-}
+type ReportTab = "stock"|"consumption"|"expiry"|"pr"|"po"|"grn";
 
-const s: Record<string, any> = {
-  page:    { fontFamily: "Inter,sans-serif", minHeight: "100vh", background: "#f8f9fa", color: "#111827" },
-  header:  { background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 24px", height: 56,
-             display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, zIndex: 10 },
-  content: { padding: 24, maxWidth: 1200, margin: "0 auto" },
-  card:    { background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", marginBottom: 16 },
-  cardHead:{ padding: "14px 20px", borderBottom: "1px solid #f3f4f6", display: "flex",
-             alignItems: "center", justifyContent: "space-between" },
-  cardBody:{ padding: 20 },
-  th:      { padding: "10px 14px", textAlign: "left" as const, fontSize: 11, fontWeight: 700,
-             color: "#6b7280", textTransform: "uppercase" as const, letterSpacing: "0.04em",
-             background: "#f9fafb", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap" as const },
-  td:      { padding: "11px 14px", borderBottom: "1px solid #f9fafb", fontSize: 13, color: "#111827" },
-  input:   { padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13,
-             color: "#111827", background: "#fff" },
-  metricCard: { background: "#f9fafb", borderRadius: 8, padding: "14px 18px", flex: 1, minWidth: 120 },
-};
+export default function ReportsPage() {
+  const [tab, setTab] = useState<ReportTab>("stock");
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); });
+  const [dateTo, setDateTo]   = useState(() => new Date().toISOString().slice(0,10));
+  const [category, setCategory] = useState("all");
 
-export default function ConsumptionReportPage() {
-  const [rows,      setRows]      = useState<any[]>([]);
-  const [byPatient, setByPatient] = useState<any[]>([]);
-  const [loading,   setLoading]   = useState(false);
-  const [stores,    setStores]    = useState<any[]>([]);
-  const [activePatient, setActivePatient] = useState<string | null>(null);
-
-  // Filter state
-  const [filters, setFilters] = useState({
-    patientref: "",
-    storeid:    "",
-    from:       "",
-    to:         "",
-    type:       "all",
-  });
-  const setF = (k: string, v: string) => setFilters(f => ({ ...f, [k]: v }));
-
-  useEffect(() => {
-fetch("/api/stores")
-  .then(r => r.json())
-  .then(d => setStores(Array.isArray(d) ? d : (d.stores ?? [])))
-      .catch(() => {});
-    fetchData();
-  }, []);
-
-  const fetchData = useCallback(async () => {
+  const fetchReport = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (filters.patientref) params.set("patientref", filters.patientref);
-    if (filters.storeid)    params.set("storeid",    filters.storeid);
-    if (filters.from)       params.set("from",       filters.from);
-    if (filters.to)         params.set("to",         filters.to);
-    if (filters.type !== "all") params.set("type",   filters.type);
+    const params = new URLSearchParams({ tab, dateFrom, dateTo, category });
+    const res  = await fetch(`/api/reports?${params}`);
+    const json = await res.json();
+    setData(Array.isArray(json) ? json : []);
+    setLoading(false);
+  }, [tab, dateFrom, dateTo, category]);
 
-    try {
-      const res  = await fetch(`/api/reports/consumption?${params}`);
-      const data = await res.json();
-      setStores(Array.isArray(data) ? data : (data.stores ?? []));
-      setRows(data.rows ?? []);
-      setByPatient(data.byPatient ?? []);
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
+  useEffect(() => { fetchReport(); }, [fetchReport]);
 
-  // Summary stats
-  const totalDispense = rows.filter(r => r.transactiontype === "DISPENSE").length;
-  const totalLab      = rows.filter(r => r.transactiontype === "LAB_CONSUMPTION").length;
-  const uniquePatients = new Set(rows.filter(r => r.patientref).map(r => r.patientref)).size;
-  const totalUnits    = rows.reduce((s, r) => s + Math.abs(r.quantity ?? 0), 0);
+  const tabs: { key: ReportTab; label: string; icon: string }[] = [
+    { key:"stock",       label:"Stock on Hand",    icon:icons.box },
+    { key:"consumption", label:"Consumption",       icon:icons.activity },
+    { key:"expiry",      label:"Expiry Report",     icon:icons.warning },
+    { key:"pr",          label:"Purchase Requests", icon:icons.file },
+    { key:"po",          label:"Purchase Orders",   icon:icons.file },
+    { key:"grn",         label:"GRN / Receipts",    icon:icons.file },
+  ];
 
-  const displayRows = activePatient
-    ? rows.filter(r => (r.patientref ?? "(no patient)") === activePatient)
-    : rows;
+  const exportCSV = () => {
+    if (!data.length) return;
+    const keys = Object.keys(data[0]);
+    const rows = [keys.join(","), ...data.map(r => keys.map(k => `"${r[k]??""}""`).join(","))];
+    const blob = new Blob([rows.join("\n")], { type:"text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `${tab}-report-${dateFrom}-${dateTo}.csv`; a.click();
+  };
 
   return (
     <div style={s.page}>
-      <style>{`
-        * { box-sizing: border-box; }
-        input, select { color: #111827 !important; }
-        tr:hover td { background: #f9fafb; }
-      `}</style>
-
-      {/* Header */}
+      <style>{`* { box-sizing:border-box; } input,select { color:#111827 !important; } tr:hover td { background:#f9fafb; }`}</style>
       <div style={s.header}>
-        <Link href="/" style={{ display: "flex", alignItems: "center", color: "#6b7280", textDecoration: "none" }}>
-          <Icon d={icons.back} size={15} />
-        </Link>
-        <div style={{ width: 1, height: 20, background: "#e5e7eb" }} />
-        <span style={{ fontSize: 13, color: "#9ca3af" }}>Reports</span>
-        <span style={{ fontSize: 13, color: "#9ca3af" }}>/</span>
-        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>Consumption Report</span>
+        <Link href="/" style={{ display:"flex", alignItems:"center", color:"#6b7280", textDecoration:"none" }}><Icon d={icons.back} size={15}/></Link>
+        <div style={{ width:1, height:20, background:"#e5e7eb" }}/>
+        <div style={{ width:32, height:32, background:"#f0fdf4", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}><Icon d={icons.activity} size={16} color="#16a34a"/></div>
+        <span style={{ fontSize:14, fontWeight:700 }}>Reports</span>
+        <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+          <button onClick={fetchReport} style={{ ...s.btn("ghost"), border:"1px solid #e5e7eb", display:"flex", alignItems:"center", gap:5 }}><Icon d={icons.refresh} size={13} color="#374151"/></button>
+          <button onClick={exportCSV} style={{ ...s.btn("green"), display:"flex", alignItems:"center", gap:6 }}><Icon d={icons.download} size={13} color="#fff"/> Export CSV</button>
+        </div>
       </div>
 
       <div style={s.content}>
-
-        {/* Filters */}
-        <div style={{ ...s.card, marginBottom: 20 }}>
-          <div style={s.cardHead}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Icon d={icons.filter} size={15} color="#6b7280" />
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>Filters</span>
-            </div>
-          </div>
-          <div style={{ padding: "16px 20px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Patient Ref</label>
-                <input style={{ ...s.input, width: "100%" }}
-                  value={filters.patientref}
-                  onChange={e => setF("patientref", e.target.value)}
-                  placeholder="MRN / Patient ID" />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Store</label>
-                <select style={{ ...s.input, width: "100%" }}
-                  value={filters.storeid}
-                  onChange={e => setF("storeid", e.target.value)}>
-                  <option value="">All stores</option>
-                  {stores.map((st: any) => (
-                    <option key={st.id} value={st.id}>{st.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Type</label>
-                <select style={{ ...s.input, width: "100%" }}
-                  value={filters.type}
-                  onChange={e => setF("type", e.target.value)}>
-                  <option value="all">All</option>
-                  <option value="DISPENSE">Dispense only</option>
-                  <option value="LAB_CONSUMPTION">Lab only</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>From</label>
-                <input type="date" style={{ ...s.input, width: "100%" }}
-                  value={filters.from} onChange={e => setF("from", e.target.value)} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>To</label>
-                <input type="date" style={{ ...s.input, width: "100%" }}
-                  value={filters.to} onChange={e => setF("to", e.target.value)} />
-              </div>
-              <div style={{ display: "flex", alignItems: "flex-end" }}>
-                <button onClick={fetchData}
-                  style={{ padding: "8px 20px", background: "#2563eb", color: "#fff", border: "none",
-                    borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%" }}>
-                  Apply
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Summary metrics */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-          {[
-            { label: "Total Transactions", value: rows.length,      color: "#111827" },
-            { label: "Dispense Events",    value: totalDispense,    color: "#1d4ed8" },
-            { label: "Lab Runs",           value: totalLab,         color: "#6d28d9" },
-            { label: "Unique Patients",    value: uniquePatients,   color: "#059669" },
-            { label: "Total Units Out",    value: totalUnits,       color: "#dc2626" },
-          ].map(m => (
-            <div key={m.label} style={s.metricCard}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", marginBottom: 4 }}>{m.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: m.color }}>{m.value.toLocaleString()}</div>
-            </div>
+        {/* Tabs */}
+        <div style={{ display:"flex", gap:2, marginBottom:20, borderBottom:"1px solid #e5e7eb", background:"#fff", borderRadius:"10px 10px 0 0", padding:"0 8px" }}>
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)} style={s.tab(tab===t.key)}>
+              {t.label}
+            </button>
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
-
-          {/* Patient sidebar */}
-          <div style={s.card}>
-            <div style={s.cardHead}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Icon d={icons.user} size={14} color="#6b7280" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>BY PATIENT</span>
-              </div>
-              {activePatient && (
-                <button onClick={() => setActivePatient(null)}
-                  style={{ fontSize: 11, color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}>
-                  Clear
-                </button>
-              )}
+        {/* Filters */}
+        <div style={{ ...s.card, padding:"12px 16px", display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" as const }}>
+          {(tab==="consumption"||tab==="expiry"||tab==="pr"||tab==="po"||tab==="grn") && <>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <label style={{ fontSize:12, fontWeight:600, color:"#374151" }}>From</label>
+              <input type="date" style={s.input} value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
             </div>
-            <div style={{ maxHeight: 480, overflowY: "auto" }}>
-              {byPatient.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#9ca3af", padding: "16px 20px" }}>No data.</p>
-              ) : byPatient.map((p: any) => (
-                <button key={p.patientref}
-                  onClick={() => setActivePatient(prev => prev === p.patientref ? null : p.patientref)}
-                  style={{
-                    width: "100%", textAlign: "left", display: "flex", alignItems: "center",
-                    justifyContent: "space-between", padding: "10px 16px", border: "none",
-                    borderBottom: "1px solid #f3f4f6", cursor: "pointer",
-                    background: activePatient === p.patientref ? "#eff6ff" : "#fff",
-                  }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{p.patientref}</div>
-                    <div style={{ fontSize: 11, color: "#9ca3af" }}>{p.transactions.length} transactions</div>
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700,
-                    background: "#f3f4f6", color: "#374151", padding: "2px 8px", borderRadius: 12 }}>
-                    {p.totalItems}
-                  </span>
-                </button>
-              ))}
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <label style={{ fontSize:12, fontWeight:600, color:"#374151" }}>To</label>
+              <input type="date" style={s.input} value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
             </div>
-          </div>
+          </>}
+          {tab==="stock" && (
+            <select style={s.input} value={category} onChange={e=>setCategory(e.target.value)}>
+              {["all","pharmacy","lab","hospital","radiology"].map(c=><option key={c} value={c}>{c==="all"?"All Categories":c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+            </select>
+          )}
+          <span style={{ marginLeft:"auto", fontSize:12, color:"#9ca3af" }}>{data.length} records</span>
+        </div>
 
-          {/* Transactions table */}
-          <div style={s.card}>
-            <div style={s.cardHead}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Icon d={icons.pill} size={14} color="#6b7280" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>
-                  {activePatient ? `TRANSACTIONS — ${activePatient}` : "ALL TRANSACTIONS"}
-                </span>
-              </div>
-              <span style={{ fontSize: 12, color: "#9ca3af" }}>{displayRows.length} records</span>
-            </div>
-
-            {loading ? (
-              <div style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>Loading...</div>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      {["Date", "Type", "Item", "Store", "Qty", "Patient", "Prescription", "By"].map(h => (
-                        <th key={h} style={s.th}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} style={{ padding: 40, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
-                          No records found. Adjust filters and click Apply.
-                        </td>
-                      </tr>
-                    ) : displayRows.map((r: any) => {
-                      const tc = TX_COLORS[r.transactiontype] ?? TX_COLORS.default;
-                      return (
-                        <tr key={r.id}>
-                          <td style={{ ...s.td, fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>
-                            {r.createdat ? new Date(r.createdat).toLocaleString() : "—"}
-                          </td>
-                          <td style={s.td}>
-                            <Badge label={r.transactiontype} bg={tc.bg} color={tc.color} />
-                          </td>
-                          <td style={s.td}>
-                            <div style={{ fontWeight: 600 }}>{r.itemname ?? "—"}</div>
-                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{r.itemcode}</div>
-                          </td>
-                          <td style={{ ...s.td, color: "#6b7280" }}>{r.storename ?? "—"}</td>
-                          <td style={s.td}>
-                            <span style={{ fontWeight: 700, color: "#dc2626" }}>
-                              {Math.abs(r.quantity ?? 0)} {r.uom ?? ""}
-                            </span>
-                          </td>
-                          <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
-                            {r.patientref ?? <span style={{ color: "#d1d5db" }}>—</span>}
-                          </td>
-                          <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
-                            {r.prescriptionref ?? <span style={{ color: "#d1d5db" }}>—</span>}
-                          </td>
-                          <td style={{ ...s.td, color: "#6b7280" }}>{r.createdby ?? "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+        {/* Table */}
+        <div style={s.card}>
+          {loading ? <div style={{ padding:40, textAlign:"center", color:"#9ca3af" }}>Loading report...</div>
+          : data.length===0 ? <div style={{ padding:40, textAlign:"center", color:"#9ca3af" }}>No data found</div>
+          : <div style={{ overflowX:"auto" }}>
+            {/* STOCK ON HAND */}
+            {tab==="stock" && (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>{["Item","Code","Category","UOM","Total Stock","Reserved","Available","Reorder","Status","Unit Cost","Total Value"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.map((r:any,i:number)=>{
+                    const avail = (r.totalStock||0)-(r.reservedStock||0);
+                    const isLow = avail <= (r.reorderLevel||0);
+                    return <tr key={i}>
+                      <td style={{...s.td,fontWeight:600}}>{r.name}<div style={{fontSize:11,color:"#9ca3af"}}>{r.genericName}</div></td>
+                      <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td>
+                      <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#f3f4f6",color:"#374151"}}>{r.category}</span></td>
+                      <td style={s.td}>{r.uom}</td>
+                      <td style={{...s.td,fontWeight:700}}>{r.totalStock}</td>
+                      <td style={{...s.td,color:"#d97706"}}>{r.reservedStock||0}</td>
+                      <td style={{...s.td,fontWeight:700,color:avail===0?"#dc2626":isLow?"#d97706":"#16a34a"}}>{avail}</td>
+                      <td style={{...s.td,color:"#6b7280"}}>{r.reorderLevel||0}</td>
+                      <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:avail===0?"#fee2e2":isLow?"#fef3c7":"#d1fae5",color:avail===0?"#991b1b":isLow?"#92400e":"#065f46"}}>{avail===0?"Out of Stock":isLow?"Low Stock":"In Stock"}</span></td>
+                      <td style={s.td}>{r.unitCost?`$${parseFloat(r.unitCost).toFixed(2)}`:"—"}</td>
+                      <td style={{...s.td,fontWeight:600,color:"#6366f1"}}>{r.unitCost?`$${(parseFloat(r.unitCost)*parseInt(r.totalStock||0)).toFixed(2)}`:"—"}</td>
+                    </tr>;
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{background:"#f9fafb"}}>
+                    <td colSpan={10} style={{...s.td,fontWeight:700,textAlign:"right" as const}}>Total Inventory Value:</td>
+                    <td style={{...s.td,fontWeight:700,color:"#6366f1",fontSize:15}}>${data.reduce((sum:number,r:any)=>sum+(r.unitCost?(parseFloat(r.unitCost)*parseInt(r.totalStock||0)):0),0).toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             )}
-          </div>
+
+            {/* CONSUMPTION */}
+            {tab==="consumption" && (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>{["Item","Code","Type","Qty Consumed","Transactions","Warehouse","Last Activity"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.map((r:any,i:number)=>(
+                    <tr key={i}>
+                      <td style={{...s.td,fontWeight:600}}>{r.itemName}</td>
+                      <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td>
+                      <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#fee2e2",color:"#991b1b"}}>{r.transactionType}</span></td>
+                      <td style={{...s.td,fontWeight:700,color:"#dc2626"}}>{r.totalQty}</td>
+                      <td style={s.td}>{r.txCount}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.warehouseName||"—"}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.lastActivity?new Date(r.lastActivity).toLocaleDateString():"—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* EXPIRY */}
+            {tab==="expiry" && (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>{["Item","Code","Batch","Qty","Expiry Date","Days Left","Warehouse","Status"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.map((r:any,i:number)=>{
+                    const days = Math.ceil((new Date(r.expiryDate).getTime()-Date.now())/86400000);
+                    const st = days<=0?{bg:"#fee2e2",color:"#991b1b",label:"Expired"}:days<=30?{bg:"#fee2e2",color:"#991b1b",label:"Critical"}:days<=90?{bg:"#fef3c7",color:"#92400e",label:"Warning"}:{bg:"#d1fae5",color:"#065f46",label:"OK"};
+                    return <tr key={i}>
+                      <td style={{...s.td,fontWeight:600}}>{r.itemName}</td>
+                      <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td>
+                      <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{r.batchNumber||"—"}</td>
+                      <td style={{...s.td,fontWeight:700}}>{r.quantity}</td>
+                      <td style={s.td}>{new Date(r.expiryDate).toLocaleDateString()}</td>
+                      <td style={{...s.td,fontWeight:700,color:days<=30?"#dc2626":days<=90?"#d97706":"#374151"}}>{days<=0?"Expired":`${days}d`}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.warehouseName||"—"}</td>
+                      <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color}}>{st.label}</span></td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {/* PR */}
+            {tab==="pr" && (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>{["PR Number","Requested By","Warehouse","Status","Priority","Items","Created"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.map((r:any,i:number)=>{
+                    const sc:Record<string,{bg:string,color:string}>={PENDING:{bg:"#fef3c7",color:"#92400e"},APPROVED:{bg:"#d1fae5",color:"#065f46"},REJECTED:{bg:"#fee2e2",color:"#991b1b"},ORDERED:{bg:"#dbeafe",color:"#1d4ed8"}};
+                    const c=sc[r.status]??{bg:"#f3f4f6",color:"#374151"};
+                    return <tr key={i}>
+                      <td style={{...s.td,fontFamily:"monospace",fontWeight:600}}>{r.prnumber}</td>
+                      <td style={s.td}>{r.requestedby||"—"}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.warehouseName||"—"}</td>
+                      <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:c.bg,color:c.color}}>{r.status}</span></td>
+                      <td style={s.td}>{r.priority||"—"}</td>
+                      <td style={{...s.td,fontWeight:600}}>{r.itemCount}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(r.createdat).toLocaleDateString()}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {/* PO */}
+            {tab==="po" && (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>{["PO Number","Vendor","Warehouse","Status","Total Amount","Order Date","Expected"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.map((r:any,i:number)=>{
+                    const sc:Record<string,{bg:string,color:string}>={DRAFT:{bg:"#f3f4f6",color:"#374151"},SENT:{bg:"#dbeafe",color:"#1d4ed8"},RECEIVED:{bg:"#d1fae5",color:"#065f46"},CANCELLED:{bg:"#fee2e2",color:"#991b1b"}};
+                    const c=sc[r.status]??{bg:"#f3f4f6",color:"#374151"};
+                    return <tr key={i}>
+                      <td style={{...s.td,fontFamily:"monospace",fontWeight:600}}>{r.ponumber}</td>
+                      <td style={s.td}>{r.vendorName||"—"}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.warehouseName||"—"}</td>
+                      <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:c.bg,color:c.color}}>{r.status}</span></td>
+                      <td style={{...s.td,fontWeight:600,color:"#6366f1"}}>{r.totalamount?`$${parseFloat(r.totalamount).toFixed(2)}`:"—"}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.orderdate?new Date(r.orderdate).toLocaleDateString():"—"}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.expecteddate?new Date(r.expecteddate).toLocaleDateString():"—"}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            )}
+
+            {/* GRN */}
+            {tab==="grn" && (
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr>{["GRN Number","Vendor","Warehouse","Status","Invoice","Received By","Receipt Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.map((r:any,i:number)=>{
+                    const sc:Record<string,{bg:string,color:string}>={DRAFT:{bg:"#f3f4f6",color:"#374151"},COMPLETED:{bg:"#d1fae5",color:"#065f46"},PARTIAL:{bg:"#fef3c7",color:"#92400e"}};
+                    const c=sc[r.status]??{bg:"#f3f4f6",color:"#374151"};
+                    return <tr key={i}>
+                      <td style={{...s.td,fontFamily:"monospace",fontWeight:600}}>{r.grnnumber}</td>
+                      <td style={s.td}>{r.vendorName||"—"}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.warehouseName||"—"}</td>
+                      <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:c.bg,color:c.color}}>{r.status}</span></td>
+                      <td style={{...s.td,fontFamily:"monospace",fontSize:12}}>{r.invoicenumber||"—"}</td>
+                      <td style={s.td}>{r.receivedby||"—"}</td>
+                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.receiptdate?new Date(r.receiptdate).toLocaleDateString():"—"}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>}
         </div>
       </div>
     </div>

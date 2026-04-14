@@ -12,7 +12,8 @@ const icons = {
   check:   "M20 6L9 17l-5-5",
   import:  "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3",
   pill:    "M10.5 6.5L6.5 10.5M9 3l12 12-6 6L3 9l6-6z",
-  spin:    "M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83",
+  box:     "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
+  update:  "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
 };
 
 const FORM_COLORS: Record<string, string> = {
@@ -21,226 +22,285 @@ const FORM_COLORS: Record<string, string> = {
   drops: "#6b7280", suppository: "#92400e", patch: "#065f46", powder: "#9a3412",
 };
 
-interface GlobalDrug {
-  drugid: string;
-  name: string;
-  genericname: string | null;
-  atccode: string | null;
-  nationalcode: string | null;
-  form: string | null;
-  strength: string | null;
-  unit: string | null;
-  manufacturer: string | null;
-  description: string | null;
-  indication: string | null;
-  interaction: string | null;
-  warning: string | null;
-  sideeffect: string | null;
-  storagetype: string | null;
-  traffic: string | null;
-  pregnancy: string | null;
-  requiresprescription: boolean;
-}
-
 interface ImportDrugModalProps {
   onClose: () => void;
-  onImport: (drug: GlobalDrug) => void;
+  onImport: (drug: any) => void;
 }
 
 export function ImportDrugModal({ onClose, onImport }: ImportDrugModalProps) {
-  const [search, setSearch]       = useState("");
-  const [results, setResults]     = useState<GlobalDrug[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [selected, setSelected]   = useState<GlobalDrug | null>(null);
-  const [error, setError]         = useState("");
+  const [search, setSearch]             = useState("");
+  const [localResults, setLocalResults] = useState<any[]>([]);
+  const [globalResults, setGlobalResults] = useState<any[]>([]);
+  const [loading, setLoading]           = useState(false);
+  const [selected, setSelected]         = useState<any>(null);
+  const [selectedSource, setSelectedSource] = useState<"local"|"global"|null>(null);
+  const [error, setError]               = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   useEffect(() => {
-    if (search.length < 2) { setResults([]); return; }
+    if (search.length < 2) { setLocalResults([]); setGlobalResults([]); return; }
     const timer = setTimeout(async () => {
       setLoading(true); setError("");
       try {
-        const res  = await fetch(`/api/drugs/global?search=${encodeURIComponent(search)}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Search failed");
-        setResults(Array.isArray(data) ? data : []);
+        // Search BOTH simultaneously
+        const [localRes, globalRes] = await Promise.all([
+          fetch(`/api/pharmacy/items?search=${encodeURIComponent(search)}`),
+          fetch(`/api/drugs/global?search=${encodeURIComponent(search)}`),
+        ]);
+        const [localData, globalData] = await Promise.all([localRes.json(), globalRes.json()]);
+        setLocalResults(Array.isArray(localData) ? localData.slice(0, 8) : []);
+        setGlobalResults(Array.isArray(globalData) ? globalData.slice(0, 15) : []);
       } catch (e: any) {
-        setError(e.message);
-        setResults([]);
+        setError("Search failed — check connection");
       } finally { setLoading(false); }
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const formColor = selected ? (FORM_COLORS[selected.form ?? ""] ?? "#6b7280") : "#6b7280";
+  const selectLocal = (item: any) => {
+    setSelected(item);
+    setSelectedSource("local");
+  };
+
+  const selectGlobal = (drug: any) => {
+    setSelected(drug);
+    setSelectedSource("global");
+  };
+
+  const handleImport = () => {
+    if (!selected) return;
+    if (selectedSource === "local") {
+      // Pass local item — wizard will open in UPDATE mode
+      onImport({ ...selected, _source: "local", _isUpdate: true });
+    } else {
+      // Pass global drug — wizard will open in ADD mode
+      onImport({ ...selected, _source: "global", _isUpdate: false });
+    }
+  };
+
+  const totalResults = localResults.length + globalResults.length;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <style>{`* { box-sizing: border-box; } input { color: #111827 !important; } .drug-row:hover { background: #f0f9ff !important; cursor: pointer; } .drug-row.selected { background: #eff6ff !important; }`}</style>
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'Inter', system-ui, sans-serif" }}>
+      <style>{`* { box-sizing:border-box; } input { color:#111827 !important; } .drug-row:hover { background:#f0f9ff !important; cursor:pointer; }`}</style>
 
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 680, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 25px 50px rgba(0,0,0,0.2)" }}>
+      <div style={{ background:"#fff", borderRadius:16, width:"100%", maxWidth:700, maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 25px 50px rgba(0,0,0,0.2)" }}>
 
         {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, background: "#eff6ff", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Icon d={icons.import} size={18} color="#2563eb" />
+        <div style={{ padding:"20px 24px", borderBottom:"1px solid #f3f4f6", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:36, height:36, background:"#eff6ff", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Icon d={icons.import} size={18} color="#2563eb"/>
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>Import from Drug Database</div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Search the global drug registry and auto-fill fields</div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#111827" }}>Search Drug Database</div>
+              <div style={{ fontSize:12, color:"#6b7280" }}>Checks pharmacy inventory first, then global database</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "#f3f4f6", border: "none", borderRadius: 8, padding: 8, cursor: "pointer", display: "flex" }}>
-            <Icon d={icons.x} size={16} color="#6b7280" />
+          <button onClick={onClose} style={{ background:"#f3f4f6", border:"none", borderRadius:8, padding:8, cursor:"pointer", display:"flex" }}>
+            <Icon d={icons.x} size={16} color="#6b7280"/>
           </button>
         </div>
 
-        {/* Search bar */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid #f3f4f6", flexShrink: 0 }}>
-          <div style={{ position: "relative" }}>
-            <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
-              {loading
-                ? <Icon d={icons.spin} size={15} color="#9ca3af" />
-                : <Icon d={icons.search} size={15} color="#9ca3af" />
-              }
+        {/* Search */}
+        <div style={{ padding:"16px 24px", borderBottom:"1px solid #f3f4f6", flexShrink:0 }}>
+          <div style={{ position:"relative" }}>
+            <div style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)" }}>
+              <Icon d={icons.search} size={15} color="#9ca3af"/>
             </div>
             <input
               ref={inputRef}
               value={search}
-              onChange={e => { setSearch(e.target.value); setSelected(null); }}
+              onChange={e => { setSearch(e.target.value); setSelected(null); setSelectedSource(null); }}
               placeholder="Search by drug name, generic name, or ATC code..."
-              style={{ width: "100%", padding: "10px 12px 10px 38px", border: "1.5px solid #e5e7eb", borderRadius: 10, fontSize: 14, outline: "none", background: "#f9fafb" }}
+              style={{ width:"100%", padding:"10px 36px", border:"1.5px solid #e5e7eb", borderRadius:10, fontSize:14, outline:"none", background:"#f9fafb" }}
             />
             {search && (
-              <button onClick={() => { setSearch(""); setResults([]); setSelected(null); }}
-                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-                <Icon d={icons.x} size={14} color="#9ca3af" />
+              <button onClick={()=>{setSearch("");setLocalResults([]);setGlobalResults([]);setSelected(null);}}
+                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", padding:4 }}>
+                <Icon d={icons.x} size={14} color="#9ca3af"/>
               </button>
             )}
           </div>
-          {error && <div style={{ marginTop: 8, fontSize: 12, color: "#dc2626" }}>{error}</div>}
+          {error && <div style={{ marginTop:8, fontSize:12, color:"#dc2626" }}>{error}</div>}
         </div>
 
-        {/* Body — results left, preview right */}
-        <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
+        {/* Body */}
+        <div style={{ display:"flex", flex:1, overflow:"hidden", minHeight:0 }}>
 
           {/* Results list */}
-          <div style={{ width: 320, borderRight: "1px solid #f3f4f6", overflowY: "auto", flexShrink: 0 }}>
+          <div style={{ width:320, borderRight:"1px solid #f3f4f6", overflowY:"auto", flexShrink:0 }}>
             {search.length < 2 ? (
-              <div style={{ padding: 32, textAlign: "center" }}>
-                <Icon d={icons.search} size={32} color="#d1d5db" />
-                <div style={{ marginTop: 12, fontSize: 13, color: "#9ca3af" }}>Type at least 2 characters to search</div>
+              <div style={{ padding:32, textAlign:"center" }}>
+                <Icon d={icons.search} size={32} color="#d1d5db"/>
+                <div style={{ marginTop:12, fontSize:13, color:"#9ca3af" }}>Type at least 2 characters to search</div>
               </div>
-            ) : loading && results.length === 0 ? (
-              <div style={{ padding: 32, textAlign: "center", fontSize: 13, color: "#9ca3af" }}>Searching...</div>
-            ) : results.length === 0 ? (
-              <div style={{ padding: 32, textAlign: "center" }}>
-                <div style={{ fontSize: 13, color: "#9ca3af" }}>No drugs found for "{search}"</div>
-              </div>
+            ) : loading && totalResults === 0 ? (
+              <div style={{ padding:32, textAlign:"center", fontSize:13, color:"#9ca3af" }}>Searching pharmacy and global database...</div>
+            ) : totalResults === 0 ? (
+              <div style={{ padding:32, textAlign:"center", fontSize:13, color:"#9ca3af" }}>No drugs found for "{search}"</div>
             ) : (
               <>
-                <div style={{ padding: "8px 16px", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #f9fafb" }}>
-                  {results.length} result{results.length !== 1 ? "s" : ""}
-                </div>
-                {results.map(drug => {
-                  const fc = FORM_COLORS[drug.form ?? ""] ?? "#6b7280";
-                  const isSelected = selected?.drugid === drug.drugid;
-                  return (
-                    <div key={drug.drugid} className={`drug-row${isSelected ? " selected" : ""}`}
-                      onClick={() => setSelected(drug)}
-                      style={{ padding: "12px 16px", borderBottom: "1px solid #f9fafb", background: isSelected ? "#eff6ff" : "#fff" }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{drug.name}</div>
-                          <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{drug.genericname ?? "—"}</div>
-                        </div>
-                        <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center" }}>
-                          {drug.form && (
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: `${fc}18`, color: fc, whiteSpace: "nowrap" }}>
-                              {drug.form}
-                            </span>
-                          )}
-                          {isSelected && <Icon d={icons.check} size={14} color="#2563eb" />}
-                        </div>
-                      </div>
-                      {drug.atccode && (
-                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 3, fontFamily: "monospace" }}>{drug.atccode}</div>
-                      )}
+                {/* LOCAL RESULTS */}
+                {localResults.length > 0 && (
+                  <>
+                    <div style={{ padding:"8px 16px", fontSize:11, fontWeight:700, color:"#065f46", textTransform:"uppercase" as const, letterSpacing:"0.05em", background:"#f0fdf4", borderBottom:"1px solid #d1fae5", display:"flex", alignItems:"center", gap:6 }}>
+                      <Icon d={icons.box} size={12} color="#16a34a"/>
+                      In Pharmacy ({localResults.length})
                     </div>
-                  );
-                })}
+                    {localResults.map(item => (
+                      <div key={item.id} className="drug-row"
+                        onClick={() => selectLocal(item)}
+                        style={{ padding:"10px 16px", borderBottom:"1px solid #f9fafb", background: selected?.id === item.id ? "#f0fdf4" : "#fff", cursor:"pointer" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:"#111827" }}>{item.name}</div>
+                            <div style={{ fontSize:11, color:"#6b7280" }}>{item.genericName ?? "—"}</div>
+                          </div>
+                          <div style={{ flexShrink:0, textAlign:"right" as const }}>
+                            <div style={{ fontSize:11, fontWeight:700, color:"#16a34a" }}>{item.totalStock} {item.uom}</div>
+                            <span style={{ fontSize:10, fontWeight:600, padding:"1px 6px", borderRadius:10, background:"#d1fae5", color:"#065f46" }}>In stock</span>
+                          </div>
+                        </div>
+                        <div style={{ fontSize:11, color:"#9ca3af", marginTop:2, fontFamily:"monospace" }}>{item.itemcode}</div>
+                        {selected?.id === item.id && (
+                          <div style={{ marginTop:6, fontSize:11, color:"#16a34a", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                            <Icon d={icons.update} size={11} color="#16a34a"/> Will update stock
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* GLOBAL RESULTS */}
+                {globalResults.length > 0 && (
+                  <>
+                    <div style={{ padding:"8px 16px", fontSize:11, fontWeight:700, color:"#1d4ed8", textTransform:"uppercase" as const, letterSpacing:"0.05em", background:"#eff6ff", borderBottom:"1px solid #bfdbfe", borderTop: localResults.length > 0 ? "2px solid #e5e7eb" : "none", display:"flex", alignItems:"center", gap:6 }}>
+                      <Icon d={icons.import} size={12} color="#2563eb"/>
+                      Global Database ({globalResults.length})
+                    </div>
+                    {globalResults.map(drug => {
+                      const fc = FORM_COLORS[drug.form ?? ""] ?? "#6b7280";
+                      const isSelected = selected?.drugid === drug.drugid && selectedSource === "global";
+                      return (
+                        <div key={drug.drugid} className="drug-row"
+                          onClick={() => selectGlobal(drug)}
+                          style={{ padding:"10px 16px", borderBottom:"1px solid #f9fafb", background: isSelected ? "#eff6ff" : "#fff", cursor:"pointer" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                            <div style={{ minWidth:0 }}>
+                              <div style={{ fontSize:13, fontWeight:600, color:"#111827" }}>{drug.name}</div>
+                              <div style={{ fontSize:11, color:"#6b7280" }}>{drug.genericname ?? "—"}</div>
+                            </div>
+                            <div style={{ display:"flex", gap:4, flexShrink:0, alignItems:"center" }}>
+                              {drug.form && (
+                                <span style={{ fontSize:10, fontWeight:600, padding:"2px 7px", borderRadius:20, background:`${fc}18`, color:fc, whiteSpace:"nowrap" as const }}>
+                                  {drug.form}
+                                </span>
+                              )}
+                              {isSelected && <Icon d={icons.check} size={14} color="#2563eb"/>}
+                            </div>
+                          </div>
+                          {drug.atccode && <div style={{ fontSize:10, color:"#9ca3af", marginTop:2, fontFamily:"monospace" }}>{drug.atccode}</div>}
+                          {isSelected && (
+                            <div style={{ marginTop:6, fontSize:11, color:"#2563eb", fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                              <Icon d={icons.import} size={11} color="#2563eb"/> Will add as new drug
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </>
             )}
           </div>
 
           {/* Preview panel */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div style={{ flex:1, overflowY:"auto", padding:20 }}>
             {!selected ? (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: "#9ca3af" }}>
-                <Icon d={icons.pill} size={40} color="#e5e7eb" />
-                <div style={{ fontSize: 13, textAlign: "center" }}>Select a drug from the list to preview its details</div>
+              <div style={{ height:"100%", display:"flex", flexDirection:"column" as const, alignItems:"center", justifyContent:"center", gap:12, color:"#9ca3af" }}>
+                <Icon d={icons.pill} size={40} color="#e5e7eb"/>
+                <div style={{ fontSize:13, textAlign:"center" as const }}>
+                  Select a drug from the list<br/>
+                  <span style={{ fontSize:11 }}>Green = already in pharmacy · Blue = from global database</span>
+                </div>
               </div>
-            ) : (
+            ) : selectedSource === "local" ? (
+              // LOCAL PREVIEW
               <>
-                {/* Drug header */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: `${formColor}18`, border: `1px solid ${formColor}30`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Icon d={icons.pill} size={20} color={formColor} />
+                <div style={{ padding:"12px 14px", background:"#f0fdf4", borderRadius:10, border:"1px solid #bbf7d0", marginBottom:16 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#065f46", marginBottom:4 }}>✓ Already in Pharmacy Inventory</div>
+                  <div style={{ fontSize:13, color:"#111827", fontWeight:600 }}>{selected.name}</div>
+                  <div style={{ fontSize:12, color:"#6b7280" }}>{selected.genericName}</div>
+                  <div style={{ marginTop:8, display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    {[
+                      ["Item Code", selected.itemcode],
+                      ["UOM", selected.uom],
+                      ["Current Stock", `${selected.totalStock} ${selected.uom}`],
+                      ["Reorder Level", selected.reorderLevel ?? "—"],
+                      ["Purchase Price", selected.unitCost ? `$${parseFloat(selected.unitCost).toFixed(2)}` : "—"],
+                      ["Selling Price", selected.sellingPrice ? `$${parseFloat(selected.sellingPrice).toFixed(2)}` : "—"],
+                    ].map(([label, value]) => (
+                      <div key={label} style={{ background:"#fff", borderRadius:6, padding:"6px 10px", border:"1px solid #d1fae5" }}>
+                        <div style={{ fontSize:10, color:"#6b7280" }}>{label}</div>
+                        <div style={{ fontSize:12, fontWeight:600, color:"#111827" }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ padding:"10px 14px", background:"#eef2ff", borderRadius:8, fontSize:12, color:"#4338ca", marginBottom:16 }}>
+                  💡 Clicking Import will open the wizard where you can <strong>add stock quantity</strong> to this existing item. All other details are already set up.
+                </div>
+                <button onClick={handleImport}
+                  style={{ width:"100%", padding:"12px", background:"#16a34a", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+                  <Icon d={icons.update} size={16} color="#fff"/>
+                  Update Stock for "{selected.name}"
+                </button>
+              </>
+            ) : (
+              // GLOBAL PREVIEW
+              <>
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+                  <div style={{ width:44, height:44, borderRadius:12, background:`${FORM_COLORS[selected.form??""]}18`, border:`1px solid ${FORM_COLORS[selected.form??""]}30`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Icon d={icons.pill} size={20} color={FORM_COLORS[selected.form??""] ?? "#6b7280"}/>
                   </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{selected.name}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>{selected.genericname}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:"#111827" }}>{selected.name}</div>
+                    <div style={{ fontSize:12, color:"#6b7280" }}>{selected.genericname}</div>
                   </div>
                 </div>
 
-                {/* Fields that will be auto-filled */}
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
-                    Fields that will be auto-filled
-                  </div>
-                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 14px", display: "flex", flex: 1, flexWrap: "wrap", gap: 6 }}>
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#374151", textTransform:"uppercase" as const, letterSpacing:"0.06em", marginBottom:8 }}>Fields that will be auto-filled</div>
+                  <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"10px 14px", display:"flex", flexWrap:"wrap" as const, gap:6 }}>
                     {[
-                      { label: "Name",         value: selected.name },
-                      { label: "Generic name", value: selected.genericname },
-                      { label: "ATC code",     value: selected.atccode },
-                      { label: "National code",value: selected.nationalcode },
-                      { label: "Form",         value: selected.form },
-                      { label: "Strength",     value: selected.strength },
-                      { label: "Unit",         value: selected.unit },
-                      { label: "Manufacturer", value: selected.manufacturer },
-                      { label: "Indication",   value: selected.indication },
-                      { label: "Interaction",  value: selected.interaction },
-                      { label: "Warning",      value: selected.warning },
-                      { label: "Side effects", value: selected.sideeffect },
-                      { label: "Storage type", value: selected.storagetype },
-                      { label: "Traffic",      value: selected.traffic },
-                      { label: "Pregnancy cat",value: selected.pregnancy },
-                      { label: "Requires Rx",  value: selected.requiresprescription ? "Yes" : "No" },
-                    ].filter(f => f.value).map(f => (
-                      <div key={f.label} style={{ background: "#fff", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 10px" }}>
-                        <span style={{ fontSize: 10, color: "#6b7280" }}>{f.label}: </span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#111827" }}>{f.value}</span>
+                      ["Name", selected.name], ["Generic", selected.genericname],
+                      ["ATC", selected.atccode], ["Form", selected.form],
+                      ["Strength", selected.strength], ["Unit", selected.unit],
+                      ["Manufacturer", selected.manufacturer], ["Indication", selected.indication ? "✓" : null],
+                      ["Warning", selected.warning ? "✓" : null], ["Storage", selected.storagetype],
+                      ["Requires Rx", selected.requiresprescription ? "Yes" : null],
+                    ].filter(([,v]) => v).map(([label, value]) => (
+                      <div key={label as string} style={{ background:"#fff", border:"1px solid #bbf7d0", borderRadius:6, padding:"4px 10px" }}>
+                        <span style={{ fontSize:10, color:"#6b7280" }}>{label}: </span>
+                        <span style={{ fontSize:11, fontWeight:600, color:"#111827" }}>{value}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Fields user still needs to fill */}
-                <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>You will still need to fill in:</div>
-                  <div style={{ fontSize: 12, color: "#92400e" }}>Unit cost · Selling price · Billing code · Min/max stock · Lead time · Supplier · Insurance approved</div>
+                <div style={{ background:"#fef3c7", border:"1px solid #fde68a", borderRadius:8, padding:"10px 14px", marginBottom:14 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#92400e", marginBottom:4 }}>You will still need to fill in:</div>
+                  <div style={{ fontSize:12, color:"#92400e" }}>Unit cost · Selling price · Insurance % · Warehouse · Initial stock quantity</div>
                 </div>
 
-                {/* Import button */}
-                <button onClick={() => onImport(selected)}
-                  style={{ width: "100%", padding: "12px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <Icon d={icons.import} size={16} color="#fff" />
-                  Import "{selected.name}"
+                <button onClick={handleImport}
+                  style={{ width:"100%", padding:"12px", background:"#2563eb", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+                  <Icon d={icons.import} size={16} color="#fff"/>
+                  Import "{selected.name}" as New Drug
                 </button>
               </>
             )}
