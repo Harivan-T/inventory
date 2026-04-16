@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ImportDrugModal } from "@/components/ImportDrugModal";
 import { AddDrugToPharmacyWizard } from "@/components/AddDrugToPharmacyWizard";
 
 const Icon = ({ d, size = 16, color = "currentColor" }: { d: string; size?: number; color?: string }) => (
@@ -19,6 +18,7 @@ const icons = {
   pill:    "M10.5 6.5L6.5 10.5M9 3l12 12-6 6L3 9l6-6z",
   import:  "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3",
   edit:    "M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z",
+  eye:     "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 100 6 3 3 0 000-6",
   trash:   "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6",
   refresh: "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
   lock:    "M12 17a2 2 0 100-4 2 2 0 000 4zm6-6V9a6 6 0 10-12 0v2H4v13h16V11h-2z",
@@ -29,8 +29,8 @@ const s: Record<string, any> = {
   page:    { fontFamily: "Inter,sans-serif", minHeight: "100vh", background: "#f8f9fa", color: "#111827" },
   header:  { background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 24px", height: 56, display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, zIndex: 10 },
   content: { padding: 24, maxWidth: 1400, margin: "0 auto" },
-  tabs:    { display: "flex", gap: 2, marginBottom: 24, borderBottom: "1px solid #e5e7eb", flexWrap: "wrap" as const },
-  tab:     (a: boolean) => ({ padding: "10px 16px", fontSize: 13, fontWeight: 500, border: "none", background: "none", cursor: "pointer", borderBottom: a ? "2px solid #6366f1" : "2px solid transparent", color: a ? "#6366f1" : "#6b7280" }),
+  tabs:    { display: "flex", gap: 4, marginBottom: 16, background: "#f3f4f6", flexWrap: "wrap" as const, borderRadius: 10, padding: "4px", position: "sticky" as const, top: 56, zIndex: 9 },
+  tab:     (a: boolean) => ({ padding: "10px 18px", fontSize: 13, fontWeight: a?700:500, border: "none", background: a?"#6366f1":"transparent", cursor: "pointer", borderBottom: "none", color: a?"#fff":"#6b7280", borderRadius: 8, margin: "4px 2px" }),
   card:    { background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", marginBottom: 16 },
   th:      { padding: "10px 12px", textAlign: "left" as const, fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" as const, background: "#f9fafb", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap" as const },
   td:      { padding: "10px 12px", borderBottom: "1px solid #f9fafb", fontSize: 13, color: "#111827" },
@@ -75,6 +75,41 @@ function Pagination({ page, total, pageSize, setPage }: { page: number; total: n
         <button onClick={() => setPage(Math.min(totalPages, page+1))} disabled={page===totalPages}
           style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #e5e7eb", background: page===totalPages?"#f9fafb":"#fff", fontSize: 12, cursor: page===totalPages?"default":"pointer", color: page===totalPages?"#d1d5db":"#374151" }}>Next →</button>
       </div>
+    </div>
+  );
+}
+
+// ── Shelf Search / Create ──────────────────────────────────────────────────────
+const DEFAULT_SHELVES = ["Shelf A-1","Shelf A-2","Shelf B-1","Shelf B-2","Shelf C-1","Shelf C-2","Fridge 1","Fridge 2","Freezer 1","Cabinet 1","Controlled Room","Dispensary Counter"];
+
+function ShelfSearch({ value, existingShelves, onChange }: { value:string; existingShelves:string[]; onChange:(v:string)=>void }) {
+  const [query, setQuery] = useState(value||"");
+  const [open, setOpen]   = useState(false);
+  const allShelves = [...new Set([...DEFAULT_SHELVES, ...existingShelves])];
+  const filtered   = allShelves.filter(s => !query || s.toLowerCase().includes(query.toLowerCase()));
+  const showCreate = query.trim() && !allShelves.find(s=>s.toLowerCase()===query.toLowerCase());
+  return (
+    <div style={{position:"relative"}}>
+      <input style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13,color:"#111827",boxSizing:"border-box" as const}}
+        value={query} placeholder="Search or create shelf..."
+        onChange={e=>{setQuery(e.target.value);onChange(e.target.value);setOpen(true);}}
+        onFocus={()=>setOpen(true)} onBlur={()=>setTimeout(()=>setOpen(false),150)}/>
+      {open && (filtered.length>0||showCreate) && (
+        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:200,maxHeight:200,overflowY:"auto" as const}}>
+          {filtered.slice(0,10).map(s=>(
+            <div key={s} onMouseDown={()=>{setQuery(s);onChange(s);setOpen(false);}}
+              style={{padding:"8px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f3f4f6"}}
+              onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")}
+              onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>{s}</div>
+          ))}
+          {showCreate && (
+            <div onMouseDown={()=>{setQuery(query);onChange(query);setOpen(false);}}
+              style={{padding:"8px 12px",cursor:"pointer",fontSize:13,color:"#6366f1",fontWeight:600,borderTop:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:6}}>
+              <span>+</span> Create "{query}"
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -373,7 +408,7 @@ function BatchModal({ item, onClose }: { item: any; onClose: ()=>void }) {
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function PharmacyPage() {
-  type Tab = "items"|"stock"|"dispense"|"controlled"|"history"|"shoplist"|"suppliers"|"manufacturers"|"expiry"|"adjustments"|"quarantine"|"orders"|"uom"|"reports";
+  type Tab = "items"|"stock"|"history"|"shoplist"|"suppliers"|"manufacturers"|"storage"|"orders"|"uom"|"reports";
   const [tab, setTab] = useState<Tab>("items");
   const [items, setItems] = useState<any[]>([]);
   const [dispenses, setDispenses] = useState<any[]>([]);
@@ -390,10 +425,10 @@ export default function PharmacyPage() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTypeFilter, setHistoryTypeFilter] = useState("ALL");
   const HISTORY_SIZE = 15;
-  const [showDispense, setShowDispense] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteItem, setDeleteItem] = useState<any>(null);
+  const [viewItem, setViewItem]       = useState<any>(null);
   const [batchItem, setBatchItem] = useState<any>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddDrug, setShowAddDrug] = useState(false);
@@ -404,6 +439,11 @@ export default function PharmacyPage() {
   const [shopQtys, setShopQtys] = useState<Record<string,number>>({});
   const [shopLoading, setShopLoading] = useState(false);
   const [shopSaving, setShopSaving] = useState(false);
+  const [shopCreatedBy, setShopCreatedBy] = useState("");
+  const [shopSupplierFilter, setShopSupplierFilter] = useState("");
+  const [cartItems, setCartItems]       = useState<any[]>([]);
+  const [showCartModal, setShowCartModal] = useState(false);
+  const [cartSupplier, setCartSupplier] = useState("");
   const [shopSearch, setShopSearch] = useState("");
   const [shopSearchResults, setShopSearchResults] = useState<any[]>([]);
   const [shopSearching, setShopSearching] = useState(false);
@@ -417,6 +457,12 @@ export default function PharmacyPage() {
   const [mfgRow, setMfgRow]                 = useState<any>(null);
   const [deleteMfg, setDeleteMfg]           = useState<any>(null);
   const [mfgForm, setMfgForm]               = useState({ name:"", code:"", country:"", contactname:"", phone:"", email:"", address:"", website:"", license_number:"", product_types:"", notes:"" });
+  const [storageLocations, setStorageLocations] = useState<any[]>([]);
+  const [storageModal, setStorageModal]         = useState<"add"|"edit"|null>(null);
+  const [storageRow, setStorageRow]             = useState<any>(null);
+  const [deleteStorage, setDeleteStorage]       = useState<any>(null);
+  const [storageForm, setStorageForm]           = useState({ name:"", location:"", type:"shelf", temperature:"", notes:"" });
+  const [storageSearch, setStorageSearch]       = useState("");
   const [showAddSupplier, setShowAddSupplier] = useState(false);
   const [supplierForm, setSupplierForm] = useState({ name:"", contactPerson:"", email:"", phone:"", address:"" });
   const [editSupplier, setEditSupplier] = useState<any>(null);
@@ -424,22 +470,8 @@ export default function PharmacyPage() {
   const [supplierItems, setSupplierItems] = useState<any[]>([]);
   const [supplierItemsLoading, setSupplierItemsLoading] = useState(false);
   // Expiry alerts
-  const [expiry, setExpiry]               = useState<any[]>([]);
-  const [expiryDays, setExpiryDays]       = useState(90);
-  const [expiryLoading, setExpiryLoading] = useState(false);
   // Adjustments
-  const [adjustments, setAdjustments]     = useState<any[]>([]);
-  const [adjLoading, setAdjLoading]       = useState(false);
-  const [showAdjModal, setShowAdjModal]   = useState(false);
-  const [adjForm, setAdjForm]             = useState({ itemId:"", warehouseId:"", batchId:"", adjustmentQty:"", reason:"", createdBy:"" });
-  const [adjBatches, setAdjBatches]       = useState<any[]>([]);
   // Quarantine
-  const [quarantine, setQuarantine]       = useState<any[]>([]);
-  const [quarLoading, setQuarLoading]     = useState(false);
-  const [showQuarModal, setShowQuarModal] = useState(false);
-  const [quarForm, setQuarForm]           = useState({ batchId:"", itemId:"", itemName:"", batchNumber:"", reason:"", notes:"", quarantinedBy:"" });
-  const [quarBatchSearch, setQuarBatchSearch] = useState("");
-  const [quarBatchResults, setQuarBatchResults] = useState<any[]>([]);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [receiveForm, setReceiveForm]           = useState({ itemId:"", batchNumber:"", quantity:"", unitCost:"", sellingPrice:"", expiryDate:"", manufactureDate:"", notes:"" });
   const [receivingLoading, setReceivingLoading] = useState(false);
@@ -448,16 +480,11 @@ export default function PharmacyPage() {
   const [uomRow, setUomRow]                     = useState<any>(null);
   const [uomForm, setUomForm]                   = useState({ item_id:"", from_uom:"", to_uom:"", factor:"" });
   const [pharmReports, setPharmReports]         = useState<any[]>([]);
-  const [reportType, setReportType]             = useState<"stock"|"consumption"|"expiry">("stock");
+  const [reportType, setReportType]             = useState<"stock"|"consumption">("stock");
   const [reportLoading, setReportLoading]       = useState(false);
   const [orders, setOrders]                   = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading]     = useState(false);
-  const [orderSearch, setOrderSearch]         = useState("");
   const [orderStatus, setOrderStatus]         = useState("PENDING");
-  const [selectedOrder, setSelectedOrder]     = useState<any>(null);
-  const [orderItems, setOrderItems]           = useState<any[]>([]);
-  const [orderItemsLoading, setOrderItemsLoading] = useState(false);
-  const [dispensingOrder, setDispensingOrder] = useState(false);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(()=>setToast(""),3000); };
 
@@ -502,57 +529,28 @@ export default function PharmacyPage() {
     setSuppliers(Array.isArray(data)?data:[]);
   }, [supplierSearch]);
 
+  // Load all suppliers on mount for cart modal dropdown
+  useEffect(()=>{
+    fetch("/api/pharmacy/suppliers?search=").then(r=>r.json()).then(d=>setSuppliers(Array.isArray(d)?d:[]));
+  },[]);
+
   const fetchManufacturers = useCallback(async () => {
     const res = await fetch(`/api/pharmacy/manufacturers?search=${encodeURIComponent(mfgSearch)}`);
     const data = await res.json();
     setManufacturers(Array.isArray(data)?data:[]);
   }, [mfgSearch]);
 
-  const fetchExpiry = useCallback(async () => {
-    setExpiryLoading(true);
-    const res = await fetch(`/api/pharmacy/expiry?days=${expiryDays}`);
+  const fetchStorage = useCallback(async () => {
+    const res = await fetch("/api/pharmacy/storage");
     const data = await res.json();
-    setExpiry(Array.isArray(data)?data:[]);
-    setExpiryLoading(false);
-  }, [expiryDays]);
-
-  const fetchAdjustments = useCallback(async () => {
-    setAdjLoading(true);
-    const res = await fetch("/api/pharmacy/adjustments");
-    const data = await res.json();
-    setAdjustments(Array.isArray(data)?data:[]);
-    setAdjLoading(false);
+    setStorageLocations(Array.isArray(data)?data:[]);
   }, []);
 
-  const fetchQuarantine = useCallback(async () => {
-    setQuarLoading(true);
-    const res = await fetch("/api/pharmacy/quarantine");
-    const data = await res.json();
-    setQuarantine(Array.isArray(data)?data:[]);
-    setQuarLoading(false);
-  }, []);
 
-  const searchQuarBatches = async (q: string) => {
-    setQuarBatchSearch(q);
-    if (!q.trim()) { setQuarBatchResults([]); return; }
-    const res = await fetch(`/api/pharmacy/items?search=${encodeURIComponent(q)}`);
-    const data = await res.json();
-    setQuarBatchResults(Array.isArray(data)?data.slice(0,6):[]);
-  };
 
-  const saveAdjustment = async () => {
-    if (!adjForm.itemId||!adjForm.warehouseId||!adjForm.adjustmentQty||!adjForm.reason) { showToast("All fields required"); return; }
-    const res = await fetch("/api/pharmacy/adjustments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(adjForm)});
-    if (res.ok) { setShowAdjModal(false); setAdjForm({itemId:"",warehouseId:"",batchId:"",adjustmentQty:"",reason:"",createdBy:""}); fetchAdjustments(); fetchAll(); showToast("Adjustment saved!"); }
-    else { const d=await res.json(); showToast(d.error??"Failed"); }
-  };
 
-  const saveQuarantine = async () => {
-    if (!quarForm.batchId||!quarForm.itemId||!quarForm.reason) { showToast("Batch and reason required"); return; }
-    const res = await fetch("/api/pharmacy/quarantine",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(quarForm)});
-    if (res.ok) { setShowQuarModal(false); setQuarForm({batchId:"",itemId:"",itemName:"",batchNumber:"",reason:"",notes:"",quarantinedBy:""}); setQuarBatchSearch(""); setQuarBatchResults([]); fetchQuarantine(); showToast("Batch quarantined!"); }
-    else { const d=await res.json(); showToast(d.error??"Failed"); }
-  };
+
+
 
   const fetchUom = useCallback(async () => {
     const res = await fetch("/api/uom");
@@ -570,59 +568,24 @@ export default function PharmacyPage() {
 
   const fetchOrders = useCallback(async () => {
     setOrdersLoading(true);
-    const res = await fetch(`/api/pharmacy/orders?search=${encodeURIComponent(orderSearch)}&status=${orderStatus}`);
+    const res = await fetch(`/api/pharmacy/shoporders?status=${orderStatus}`);
     const data = await res.json();
     setOrders(Array.isArray(data)?data:[]);
     setOrdersLoading(false);
-  }, [orderSearch, orderStatus]);
+  }, [orderStatus]);
 
-  const loadOrderItems = async (order: any) => {
-    setSelectedOrder(order);
-    setOrderItemsLoading(true);
-    const res = await fetch("/api/pharmacy/orders", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({orderId: order.orderId}),
-    });
-    const data = await res.json();
-    setOrderItems(Array.isArray(data)?data:[]);
-    setOrderItemsLoading(false);
-  };
 
-  const dispenseItems = async (itemsToDispense: any[], dispenseAll: boolean) => {
-    setDispensingOrder(true);
-    const payload = itemsToDispense.filter(i=>i.inventoryItem).map(i=>({
-      inventoryItemId: i.inventoryItem.id,
-      quantity: i.quantity,
-      drugName: i.drugName,
-      batchId: null,
-    }));
-    const res = await fetch("/api/pharmacy/orders/dispense", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({orderId: selectedOrder.orderId, items: payload, dispensedBy: "Pharmacy", dispenseAll}),
-    });
-    const data = await res.json();
-    showToast(data.message ?? "Done");
-    setDispensingOrder(false);
-    if (data.success) { setSelectedOrder(null); setOrderItems([]); fetchOrders(); fetchAll(); }
-    else if (data.dispensed?.length > 0) { fetchOrders(); fetchAll(); loadOrderItems(selectedOrder); }
-  };
 
-  const resolveQuarantine = async (id: string) => {
-    await fetch("/api/pharmacy/quarantine",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,resolvedBy:"Pharmacy"})});
-    fetchQuarantine(); showToast("Quarantine resolved!");
-  };
 
   useEffect(()=>{fetchAll();},[fetchAll]);
+  useEffect(()=>{fetchSuppliers();},[fetchSuppliers]);
   useEffect(()=>{if(tab==="shoplist")fetchShopList();},[tab,fetchShopList]);
   useEffect(()=>{if(tab==="suppliers")fetchSuppliers();},[tab,supplierSearch,fetchSuppliers]);
   useEffect(()=>{fetchManufacturers();},[fetchManufacturers]);
   useEffect(()=>{if(tab==="manufacturers")fetchManufacturers();},[tab,mfgSearch,fetchManufacturers]);
-  useEffect(()=>{if(tab==="expiry")fetchExpiry();},[tab,expiryDays,fetchExpiry]);
-  useEffect(()=>{if(tab==="adjustments")fetchAdjustments();},[tab,fetchAdjustments]);
-  useEffect(()=>{if(tab==="quarantine")fetchQuarantine();},[tab,fetchQuarantine]);
-  useEffect(()=>{if(tab==="orders")fetchOrders();},[tab,orderSearch,orderStatus,fetchOrders]);
+  useEffect(()=>{if(tab==="orders")fetchOrders();},[tab,orderStatus,fetchOrders]);
+  useEffect(()=>{fetchStorage();},[fetchStorage]);
+  useEffect(()=>{if(tab==="storage")fetchStorage();},[tab,fetchStorage]);
   useEffect(()=>{if(tab==="uom")fetchUom();},[tab,fetchUom]);
   useEffect(()=>{if(tab==="reports")fetchPharmReport();},[tab,reportType,fetchPharmReport]);
 
@@ -636,10 +599,14 @@ export default function PharmacyPage() {
     setShopSearching(false);
   };
 
-  const addToShopList = (item: any) => {
-    if (shopList.find(i=>i.id===item.id)||manualShopItems.find(i=>i.id===item.id)) { showToast("Already in list"); return; }
-    setManualShopItems(m=>[...m,{ id:item.id, name:item.name, genericName:item.genericName??item.generic_Name, itemcode:item.itemcode, uom:item.uom, currentStock:item.totalStock, reorderLevel:item.reorderLevel, maxLevel:item.maxLevel, lastUnitCost:item.unitCost }]);
-    setShopQtys(q=>({...q,[item.id]:1}));
+  const addToShopList = (item: any, qty: number = 1) => {
+    if (shopList.find(i=>i.id===item.id)||manualShopItems.find(i=>i.id===item.id)) {
+      setShopQtys(q=>({...q,[item.id]:(q[item.id]??0)+qty}));
+      showToast(`Updated qty for ${item.name}`); return;
+    }
+    const supplierName = item.supplierName ?? item.supplier ?? "No Supplier";
+    setManualShopItems(m=>[...m,{ id:item.id, name:item.name, genericName:item.genericName??item.generic_Name, itemcode:item.itemcode, uom:item.uom, currentStock:item.totalStock, reorderLevel:item.reorderLevel, maxLevel:item.maxLevel, lastUnitCost:item.unitCost, supplierName }]);
+    setShopQtys(q=>({...q,[item.id]:qty}));
     setShopSearch(""); setShopSearchResults([]);
   };
 
@@ -756,15 +723,14 @@ export default function PharmacyPage() {
   const controlledCt = items.filter(i=>i.controlled).length;
 
   const tabLabels: Record<Tab,string> = {
-    items:`Items (${items.length})`, stock:"Stock", dispense:"Dispense Log",
-    controlled:"Controlled", history:"History",
-    shoplist:`🛒 Shop List${shopList.length+manualShopItems.length>0?` (${shopList.length+manualShopItems.length})`:""}`,
+    items:`Items (${items.length})`,
+    stock:"Stock",
+    history:"History",
+    shoplist:`🛒 Shop List`,
     suppliers:"Suppliers",
-    manufacturers:`🏭 Manufacturers (${manufacturers.length})`,
-    expiry:`⚠️ Expiry${expiry.filter(e=>e.status!=="ok").length>0?` (${expiry.filter(e=>e.status!=="ok").length})`:""}`,
-    adjustments:"Adjustments",
-    quarantine:`🔒 Quarantine${quarantine.filter(q=>!q.isResolved).length>0?` (${quarantine.filter(q=>!q.isResolved).length})`:""}`,
-    orders:`📋 Orders${orders.filter(o=>o.status==="PENDING").length>0?` (${orders.filter(o=>o.status==="PENDING").length})`:""}`,
+    manufacturers:"🏭 Manufacturers",
+    storage:"📍 Storage",
+    orders:"📋 Orders",
     uom:"🔄 UOM",
     reports:"📊 Reports",
   };
@@ -781,16 +747,15 @@ export default function PharmacyPage() {
         <span style={{fontSize:14,fontWeight:700,color:"#111827"}}>Pharmacy Inventory</span>
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
           <button onClick={fetchAll} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}><Icon d={icons.refresh} size={13} color="#374151"/></button>
-          <button onClick={()=>setShowImportModal(true)} style={{...s.btn("ghost"),border:"1px solid #bbf7d0",color:"#16a34a",background:"#f0fdf4",display:"flex",alignItems:"center",gap:6}}><Icon d={icons.import} size={13} color="#16a34a"/> Import Drug from DB</button>
-          <button onClick={()=>{setDrugPrefill(null);setShowAddDrug(true);}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:6}}><Icon d={icons.pill} size={13} color="#6366f1"/> Add Drug</button>
-          <button onClick={()=>setShowAddItem(true)} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.plus} size={13} color="#fff"/> Add Item</button>
+          <button onClick={()=>{setDrugPrefill(null);setShowAddDrug(true);}} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.pill} size={13} color="#fff"/> Add Medicine</button>
+
         </div>
       </div>
 
-      <div style={s.content}>
+      <div style={{...s.content, marginTop:8}}>
         {/* Summary cards */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
-          {[{label:"Total Items",value:totalItems,color:"#6366f1",bg:"#eef2ff"},{label:"Low Stock",value:lowStock,color:"#d97706",bg:"#fef3c7"},{label:"Out of Stock",value:outOfStock,color:"#dc2626",bg:"#fee2e2"},{label:"Controlled",value:controlledCt,color:"#7c3aed",bg:"#f5f3ff"}].map(m=>(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
+          {[{label:"Total Items",value:totalItems,color:"#6366f1",bg:"#eef2ff"},{label:"Low Stock",value:lowStock,color:"#d97706",bg:"#fef3c7"},{label:"Out of Stock",value:outOfStock,color:"#dc2626",bg:"#fee2e2"}].map(m=>(
             <div key={m.label} style={{background:m.bg,borderRadius:10,padding:"14px 18px"}}>
               <div style={{fontSize:11,fontWeight:600,color:m.color,marginBottom:4}}>{m.label}</div>
               <div style={{fontSize:28,fontWeight:700,color:"#111827"}}>{m.value}</div>
@@ -811,47 +776,43 @@ export default function PharmacyPage() {
             <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" as const}}>
               <div style={{position:"relative",display:"flex",alignItems:"center"}}>
                 <div style={{position:"absolute",left:10,pointerEvents:"none"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
-                <input placeholder="Search items..." value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} style={{...s.input,width:200,paddingLeft:30}}/>
+                <input placeholder="Search name, code, generic, supplier..." value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} style={{...s.input,width:280,paddingLeft:30}}/>
               </div>
               <div style={{width:1,height:20,background:"#e5e7eb"}}/>
-              {[{key:"all",label:"All",count:items.length},{key:"drug",label:"Drug",count:items.filter(i=>i.itemType==="drug").length},{key:"supply",label:"Supply",count:items.filter(i=>i.itemType==="supply").length},{key:"consumable",label:"Consumable",count:items.filter(i=>i.itemType==="consumable").length},{key:"asset",label:"Asset",count:items.filter(i=>i.itemType==="asset").length}].map(t=>(
-                <button key={t.key} onClick={()=>{setTypeFilter(t.key);setPage(1);}} style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${typeFilter===t.key?"#6366f1":"#e5e7eb"}`,background:typeFilter===t.key?"#6366f1":"#f9fafb",color:typeFilter===t.key?"#fff":"#374151",cursor:"pointer",whiteSpace:"nowrap" as const}}>
-                  {t.label} ({t.count})
+              {["all","drug","device","cosmetic","cream","supplement","consumable","other"].map(t=>(
+                <button key={t} onClick={()=>{setTypeFilter(t);setPage(1);}} style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${typeFilter===t?"#6366f1":"#e5e7eb"}`,background:typeFilter===t?"#6366f1":"#f9fafb",color:typeFilter===t?"#fff":"#374151",cursor:"pointer"}}>
+                  {t.charAt(0).toUpperCase()+t.slice(1)} {t==="all"?`(${items.length})`:""}
                 </button>
               ))}
               <span style={{marginLeft:"auto",fontSize:12,color:"#9ca3af"}}>{filteredItems.length} items</span>
             </div>
-            {loading ? <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading...</div>
-            : filteredItems.length===0 ? <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No items found. <button onClick={()=>setShowAddItem(true)} style={{color:"#6366f1",background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Add one →</button></div>
-            : <>
+            {loading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading...</div>
+            :filteredItems.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No items found.</div>
+            :<>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Item","Code","Type","UOM","Stock","Reorder","Purchase Price","Selling Price","Expiry","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <thead><tr>{["Item","Code","Type","UOM","Stock","Purchase Price","Selling Price","Supplier","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
                     {filteredItems.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE).map(item=>{
                       const sc=stockColor(parseInt(item.totalStock),parseInt(item.reorderLevel??0));
-                      const exp=expiryAlert(item.nearestExpiry);
                       return (
                         <tr key={item.id}>
                           <td style={{...s.td,minWidth:160}}>
                             <div style={{fontWeight:600}}>{item.name}</div>
                             {(item.genericName??item.generic_Name)&&<div style={{fontSize:11,color:"#9ca3af"}}>{item.genericName??item.generic_Name}</div>}
-                            {item.controlled&&<span style={{fontSize:10,fontWeight:600,padding:"1px 6px",borderRadius:10,background:"#f5f3ff",color:"#7c3aed",display:"inline-block",marginTop:2}}>Controlled</span>}
                           </td>
                           <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{item.itemcode}</td>
                           <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#f3f4f6",color:"#374151"}}>{item.itemType}</span></td>
                           <td style={s.td}>{item.uom}</td>
-                          <td style={{...s.td,fontWeight:700,fontSize:15}}>{item.totalStock}</td>
-                          <td style={{...s.td,color:"#6b7280"}}>{item.reorderLevel??0}</td>
-                          <td style={s.td}>{item.unitCost?<span style={{fontWeight:600}}>${parseFloat(item.unitCost).toFixed(2)}</span>:<span style={{color:"#d1d5db"}}>—</span>}</td>
-                          <td style={s.td}>{item.sellingPrice?<span style={{fontWeight:600,color:"#16a34a"}}>${parseFloat(item.sellingPrice).toFixed(2)}</span>:<span style={{color:"#d1d5db"}}>—</span>}</td>
-                          <td style={s.td}>{exp?<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:exp.bg,color:exp.color}}>{exp.label}</span>:item.nearestExpiry?<span style={{fontSize:11,color:"#6b7280"}}>{new Date(item.nearestExpiry).toLocaleDateString()}</span>:<span style={{color:"#d1d5db"}}>—</span>}</td>
-                          <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:sc.bg,color:sc.color}}>{sc.label}</span></td>
+                          <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:sc.bg,color:sc.color}}>{item.totalStock}</span></td>
+                          <td style={s.td}>{item.unitCost?`$${parseFloat(item.unitCost).toFixed(2)}`:"—"}</td>
+                          <td style={s.td}>{item.sellingPrice?<span style={{color:"#16a34a",fontWeight:600}}>${parseFloat(item.sellingPrice).toFixed(2)}</span>:"—"}</td>
+                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{item.supplierName??"—"}</td>
                           <td style={s.td}>
                             <div style={{display:"flex",gap:5}}>
                               <button onClick={()=>setBatchItem(item)} title="View batches" style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><Icon d={icons.layers} size={12} color="#16a34a"/></button>
-                              <button onClick={()=>setEditItem(item)} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><Icon d={icons.edit} size={12} color="#2563eb"/></button>
-                              <button onClick={()=>setDeleteItem(item)} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button>
+                              <button onClick={()=>setViewItem(item)} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}} title="View Details"><Icon d={icons.eye} size={12} color="#2563eb"/></button>
+                              <button onClick={()=>{addToShopList(item);showToast(`${item.name} added to cart`);setTab("shoplist");}} style={{background:"#eef2ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:11,fontWeight:600,color:"#6366f1",whiteSpace:"nowrap" as const}} title="Add to Cart">🛒</button>
                             </div>
                           </td>
                         </tr>
@@ -875,7 +836,7 @@ export default function PharmacyPage() {
             {items.length===0 ? <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No stock data</div> : <>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Item","Code","UOM","Total Stock","Reserved","Available","Batches","Purchase Price","Selling Price","Reorder","Status"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <thead><tr>{["Item","Code","UOM","Total Stock","Reserved","Available","Batches","Purchase Price","Selling Price","Reorder","Status","Edit"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
                     {items.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE).map(item=>{
                       const avail=parseInt(item.totalStock)-parseInt(item.reservedStock??0);
@@ -893,6 +854,7 @@ export default function PharmacyPage() {
                           <td style={{...s.td,color:"#16a34a",fontWeight:600}}>{item.sellingPrice?`$${parseFloat(item.sellingPrice).toFixed(2)}`:"—"}</td>
                           <td style={{...s.td,color:"#6b7280"}}>{item.reorderLevel??0}</td>
                           <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:sc.bg,color:sc.color}}>{sc.label}</span></td>
+                          <td style={s.td}><button onClick={()=>setEditItem(item)} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><Icon d={icons.edit} size={12} color="#2563eb"/></button></td>
                         </tr>
                       );
                     })}
@@ -904,36 +866,9 @@ export default function PharmacyPage() {
           </div>
         )}
 
-        {/* DISPENSE TAB */}
-        {tab==="dispense" && (
-          <div style={s.card}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:13,fontWeight:600}}>Dispense Log</span>
-              <button onClick={()=>setShowDispense(true)} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.plus} size={13} color="#fff"/> Dispense Drug</button>
-            </div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse"}}>
-                <thead><tr>{["Drug","Qty","Patient","Prescription","Dispensed By","Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {dispenses.length===0&&<tr><td colSpan={6} style={{...s.td,textAlign:"center",padding:40,color:"#9ca3af"}}>No dispense records yet</td></tr>}
-                  {dispenses.map((d:any)=>(
-                    <tr key={d.logid??d.id}>
-                      <td style={{...s.td,fontWeight:600}}>{d.drugname??d.itemname??"—"}</td>
-                      <td style={{...s.td,fontWeight:700}}>{d.quantity}</td>
-                      <td style={s.td}>{d.patientref??"—"}</td>
-                      <td style={{...s.td,fontFamily:"monospace",fontSize:12}}>{d.prescriptionref??"—"}</td>
-                      <td style={s.td}>{d.dispensedby??"—"}</td>
-                      <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(d.createdat).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
 
         {/* CONTROLLED TAB */}
-        {tab==="controlled" && (
+        {false  && (
           <div style={s.card}>
             <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6"}}><span style={{fontSize:13,fontWeight:600}}>Controlled Drug Register</span></div>
             <div style={{overflowX:"auto"}}>
@@ -968,7 +903,7 @@ export default function PharmacyPage() {
             <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" as const}}>
               <span style={{fontSize:13,fontWeight:600}}>Transaction History</span>
               <div style={{display:"flex",gap:5,flexWrap:"wrap" as const}}>
-                {["ALL","STOCK_IN","STOCK_OUT","ADJUSTMENT","WASTAGE","DISPENSE","TRANSFER"].map(type=>(
+                {["ALL","STOCK_IN","STOCK_OUT","WASTAGE","TRANSFER"].map(type=>(
                   <button key={type} onClick={()=>{setHistoryTypeFilter(type);setHistoryPage(1);}}
                     style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",
                       border:`1px solid ${historyTypeFilter===type?"#6366f1":"#e5e7eb"}`,
@@ -980,14 +915,14 @@ export default function PharmacyPage() {
               </div>
               <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{historyTotal} total</span>
             </div>
-            {history.filter((tx:any)=>historyTypeFilter==="ALL"||tx.transactionType===historyTypeFilter).length===0
+            {history.filter((tx:any)=>(historyTypeFilter==="ALL"||tx.transactionType===historyTypeFilter)&&tx.transactionType!=="DISPENSE"&&tx.transactionType!=="ADJUSTMENT").length===0
               ?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No {historyTypeFilter==="ALL"?"transactions":historyTypeFilter} records yet</div>
               :<>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                   <thead><tr>{["Item","Code","Type","Qty","Warehouse","Batch","Patient","Reference","By","Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {history.filter((tx:any)=>historyTypeFilter==="ALL"||tx.transactionType===historyTypeFilter).map((tx:any)=>{
+                    {history.filter((tx:any)=>(historyTypeFilter==="ALL"||tx.transactionType===historyTypeFilter)&&tx.transactionType!=="DISPENSE"&&tx.transactionType!=="ADJUSTMENT").map((tx:any)=>{
                       const tc:Record<string,[string,string]>={STOCK_IN:["#d1fae5","#065f46"],STOCK_OUT:["#fee2e2","#991b1b"],TRANSFER:["#dbeafe","#1e40af"],ADJUSTMENT:["#fef3c7","#92400e"],WASTAGE:["#f3f4f6","#374151"],DISPENSE:["#ede9fe","#5b21b6"]};
                       const [tbg,tcol]=tc[tx.transactionType]??["#f3f4f6","#374151"];
                       return (
@@ -1022,103 +957,226 @@ export default function PharmacyPage() {
 
         {/* SHOP LIST TAB */}
         {tab==="shoplist" && (
-          <div style={s.card}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <span style={{fontSize:13,fontWeight:600}}>Shop List</span>
-                <span style={{fontSize:12,color:"#6b7280",marginLeft:8}}>Low stock items + manually added</span>
-              </div>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap" as const}}>
-                <button onClick={fetchShopList} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}><Icon d={icons.refresh} size={13} color="#374151"/> Refresh</button>
-                <button onClick={exportShopListCSV} disabled={shopList.length===0&&manualShopItems.length===0} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5,color:"#16a34a"}}>📥 CSV</button>
-                <button onClick={printShopList} disabled={shopList.length===0&&manualShopItems.length===0} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}>🖨️ Print</button>
-                <button onClick={emailShopList} disabled={shopList.length===0&&manualShopItems.length===0} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5,color:"#6366f1"}}>✉️ Email</button>
-              </div>
-            </div>
-
-            {/* Search to add items */}
-            <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",background:"#f9fafb",position:"relative"}}>
-              <div style={{position:"relative",display:"flex",alignItems:"center",maxWidth:440}}>
-                <div style={{position:"absolute",left:10,pointerEvents:"none"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
-                <input placeholder="Search and add any drug or item to list..." value={shopSearch} onChange={e=>searchShopItems(e.target.value)} style={{...s.input,paddingLeft:30}}/>
-                {shopSearching&&<span style={{position:"absolute",right:10,fontSize:11,color:"#9ca3af"}}>...</span>}
-              </div>
-              {shopSearchResults.length>0&&(
-                <div style={{position:"absolute",top:52,left:16,width:440,background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:100}}>
-                  {shopSearchResults.map(item=>(
-                    <div key={item.id} onClick={()=>addToShopList(item)}
-                      style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}
-                      onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")}
-                      onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
-                      <div>
-                        <div style={{fontWeight:600,fontSize:13}}>{item.name}</div>
-                        <div style={{fontSize:11,color:"#9ca3af"}}>{item.itemcode} · {item.uom} · Stock: {item.totalStock}</div>
-                      </div>
-                      <span style={{fontSize:11,color:"#6366f1",fontWeight:600}}>+ Add</span>
-                    </div>
-                  ))}
+          <div>
+            {/* Cart creation modal */}
+            {showCartModal && (
+              <div style={s.overlay}><div style={{...s.modal,width:680,maxHeight:"90vh",overflowY:"auto" as const}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                  <h3 style={{fontSize:16,fontWeight:600,margin:0}}>🛒 Create Order</h3>
+                  <button onClick={()=>setShowCartModal(false)} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
                 </div>
-              )}
+
+                {/* Order details */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+                  <div style={s.fgroup}>
+                    <label style={s.label}>Created By *</label>
+                    <input style={s.input} value={shopCreatedBy} onChange={e=>setShopCreatedBy(e.target.value)} placeholder="Your name"/>
+                  </div>
+                  <div style={s.fgroup}>
+                    <label style={s.label}>Supplier</label>
+                    <select style={s.input} value={cartSupplier} onChange={e=>setCartSupplier(e.target.value)}>
+                      <option value="">— Select supplier —</option>
+                      {suppliers.map(s=><option key={s.id} value={s.name} data-email={s.email}>{s.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Cart items */}
+                {cartItems.length === 0 ? (
+                  <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No items in cart. Add items from the shop list.</div>
+                ) : (
+                  <>
+                    <table style={{width:"100%",borderCollapse:"collapse",marginBottom:12}}>
+                      <thead><tr>{["Item","Code","UOM","Stock","Qty","Unit Cost","Total",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {cartItems.map((item:any)=>{
+                          const qty = shopQtys[item.id]??1;
+                          const total = qty * parseFloat(item.lastUnitCost??0);
+                          return (
+                            <tr key={item.id}>
+                              <td style={{...s.td,fontWeight:600}}>{item.name}</td>
+                              <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{item.itemcode}</td>
+                              <td style={s.td}>{item.uom}</td>
+                              <td style={{...s.td,color:"#d97706"}}>{item.currentStock}</td>
+                              <td style={s.td}><input type="number" min={1} value={qty} onChange={e=>setShopQtys(q=>({...q,[item.id]:parseInt(e.target.value)||1}))} style={{...s.input,width:70,textAlign:"center" as const}}/></td>
+                              <td style={s.td}>{item.lastUnitCost?`$${parseFloat(item.lastUnitCost).toFixed(2)}`:"—"}</td>
+                              <td style={{...s.td,fontWeight:600,color:"#6366f1"}}>${total.toFixed(2)}</td>
+                              <td style={s.td}><button onClick={()=>setCartItems((c:any[])=>c.filter(i=>i.id!==item.id))} style={{background:"#fee2e2",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#dc2626"}}>✕</button></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{background:"#f9fafb"}}>
+                          <td colSpan={6} style={{...s.td,fontWeight:700,textAlign:"right" as const}}>Total:</td>
+                          <td style={{...s.td,fontWeight:700,color:"#6366f1",fontSize:15}}>${cartItems.reduce((sum:number,i:any)=>sum+(shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0),0).toFixed(2)}</td>
+                          <td style={s.td}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+
+                    {/* Action buttons */}
+                    <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap" as const}}>
+                      <button onClick={()=>{
+                        const NL = String.fromCharCode(10);
+                        const total = cartItems.reduce((sum:number,i:any)=>sum+(shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0),0);
+                        const supplierObj = suppliers.find(s=>s.name===cartSupplier);
+                        const lines = [
+                          `Order — ${cartSupplier||"No Supplier"}`,
+                          `Created by: ${shopCreatedBy}`,
+                          `Date: ${new Date().toLocaleDateString()}`,
+                          "",
+                          ...cartItems.map((i:any,idx:number)=>`${idx+1}. ${i.name} (${i.itemcode}) — Qty: ${shopQtys[i.id]??1} ${i.uom} — $${((shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0)).toFixed(2)}`),
+                          "",`Total: $${total.toFixed(2)}`
+                        ];
+                        const emailTo = supplierObj?.email??"";
+                        window.location.href = `mailto:${emailTo}?subject=${encodeURIComponent(`Order — ${cartSupplier} — ${new Date().toLocaleDateString()}`)}&body=${encodeURIComponent(lines.join(NL))}`;
+                        showToast("Email client opened!");
+                      }} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:12}}>✉️ Email</button>
+                      <button onClick={()=>{
+                        const NL = String.fromCharCode(10);
+                        const total = cartItems.reduce((sum:number,i:any)=>sum+(shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0),0);
+                        const headers = ["Item","Code","UOM","Stock","Qty","Unit Cost","Total"].join(",");
+                        const rows = cartItems.map((i:any)=>[`"${i.name}"`,i.itemcode,i.uom,i.currentStock,shopQtys[i.id]??1,i.lastUnitCost??0,((shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0)).toFixed(2)].join(","));
+                        const csv = [`Supplier: ${cartSupplier}`,`Created by: ${shopCreatedBy}`,`Date: ${new Date().toLocaleDateString()}`,"",[headers,...rows].join(NL),`,,,,,,Total: $${total.toFixed(2)}`].join(NL);
+                        const blob = new Blob([csv],{type:"text/csv"});
+                        const a = document.createElement("a"); a.href=URL.createObjectURL(blob);
+                        a.download=`order-${(cartSupplier||"order").split(" ").join("-")}-${new Date().toISOString().slice(0,10)}.csv`;
+                        a.click(); showToast("CSV downloaded!");
+                      }} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:12}}>📥 CSV</button>
+                      <button onClick={()=>{
+                        const total = cartItems.reduce((sum:number,i:any)=>sum+(shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0),0);
+                        const rowsHtml = cartItems.map((i:any,idx:number)=>`<tr><td>${idx+1}</td><td><b>${i.name}</b></td><td>${i.itemcode}</td><td>${i.uom}</td><td>${i.currentStock}</td><td><b>${shopQtys[i.id]??1}</b></td><td>$${parseFloat(i.lastUnitCost??0).toFixed(2)}</td><td>$${((shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0)).toFixed(2)}</td></tr>`).join("");
+                        const w = window.open("","_blank","width=900,height=700");
+                        if(w){w.document.write(`<html><head><title>Order</title><style>body{font-family:Arial;padding:20px;font-size:12px}h2{color:#6366f1}table{width:100%;border-collapse:collapse}th{background:#6366f1;color:#fff;padding:8px;text-align:left}td{padding:7px 8px;border-bottom:1px solid #e5e7eb}.total{font-weight:bold;font-size:14px;text-align:right;margin-top:16px}</style></head><body><h2>Order — ${cartSupplier||"No Supplier"}</h2><p>Created by: <b>${shopCreatedBy}</b> · ${new Date().toLocaleDateString()}</p><table><thead><tr><th>#</th><th>Item</th><th>Code</th><th>UOM</th><th>Stock</th><th>Order Qty</th><th>Unit Cost</th><th>Total</th></tr></thead><tbody>${rowsHtml}</tbody></table><div class="total">Total: $${total.toFixed(2)}</div></body></html>`);w.document.close();w.print();}
+                      }} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:12}}>🖨️ Print</button>
+                      <button disabled={shopSaving||!shopCreatedBy.trim()} onClick={async()=>{
+                        if (!shopCreatedBy.trim()) { showToast("Please enter your name"); return; }
+                        setShopSaving(true);
+                        const total = cartItems.reduce((sum:number,i:any)=>sum+(shopQtys[i.id]??1)*parseFloat(i.lastUnitCost??0),0);
+                        const orderItems = cartItems.map((i:any)=>({itemId:i.id,itemName:i.name,quantity:shopQtys[i.id]??1,unitCost:i.lastUnitCost,supplierName:cartSupplier||i.supplierName||"No Supplier"}));
+                        const res = await fetch("/api/pharmacy/shoporders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({supplier:cartSupplier,createdBy:shopCreatedBy,items:orderItems,totalAmount:total})});
+                        if(res.ok){
+                          showToast("Order created!");
+                          setCartItems([]);
+                          setShopList([]);
+                          setManualShopItems([]);
+                          setShopQtys({});
+                          setShowCartModal(false);
+                          setCartSupplier("");
+                          fetchOrders();
+                        } else showToast("Failed to create order");
+                        setShopSaving(false);
+                      }} style={{...s.btn("purple"),fontSize:12,display:"flex",alignItems:"center",gap:5}}>
+                        {shopSaving?"Saving...":<><Icon d={icons.check} size={12} color="#fff"/> Create Order</>}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div></div>
+            )}
+
+            {/* Shop list header */}
+            <div style={{...s.card,marginBottom:12,padding:"12px 16px"}}>
+              <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" as const}}>
+                <div style={{flex:1,minWidth:280,position:"relative"}}>
+                  <label style={s.label}>Search & Add to Cart</label>
+                  <div style={{position:"relative"}}>
+                    <div style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
+                    <input placeholder="Search items by name, code, supplier..." value={shopSearch} onChange={e=>searchShopItems(e.target.value)} style={{...s.input,paddingLeft:30}}/>
+                  </div>
+                  {shopSearchResults.length>0&&(
+                    <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #6366f1",borderRadius:8,boxShadow:"0 8px 24px rgba(99,102,241,0.15)",zIndex:9999,marginTop:4}}>
+                      <div style={{padding:"6px 12px",fontSize:11,fontWeight:700,color:"#6b7280",borderBottom:"1px solid #f3f4f6"}}>{shopSearchResults.length} items — click to add to cart</div>
+                      {shopSearchResults.map(item=>(
+                        <div key={item.id} onClick={()=>{addToShopList(item);setShopSearch("");setShopSearchResults([]);}}
+                          style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}
+                          onMouseEnter={e=>(e.currentTarget.style.background="#eef2ff")}
+                          onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
+                          <div>
+                            <div style={{fontWeight:600,fontSize:13}}>{item.name}</div>
+                            <div style={{fontSize:11,color:"#6b7280"}}>
+                              {item.supplierName&&<span style={{color:"#6366f1",fontWeight:600}}>{item.supplierName} · </span>}
+                              {item.itemcode} · {item.uom} · Stock: <strong style={{color:parseInt(item.totalStock)===0?"#dc2626":"#16a34a"}}>{item.totalStock}</strong>
+                            </div>
+                          </div>
+                          <span style={{fontSize:11,fontWeight:700,color:"#fff",background:"#6366f1",padding:"4px 10px",borderRadius:6,whiteSpace:"nowrap" as const}}>+ Cart</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+                  <button onClick={fetchShopList} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}>
+                    <Icon d={icons.refresh} size={13} color="#374151"/> Load Low Stock
+                  </button>
+                  <button
+                    onClick={()=>{
+                      const all = [...shopList,...manualShopItems];
+                      if(all.length===0){showToast("Cart is empty");return;}
+                      setCartItems(all);
+                      setShowCartModal(true);
+                    }}
+                    disabled={shopList.length===0&&manualShopItems.length===0}
+                    style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6,position:"relative" as const}}>
+                    🛒 View Cart
+                    {(shopList.length+manualShopItems.length)>0&&(
+                      <span style={{background:"#fff",color:"#6366f1",borderRadius:20,fontSize:10,fontWeight:700,padding:"1px 6px",marginLeft:2}}>
+                        {shopList.length+manualShopItems.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {shopLoading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading...</div>
-            :(shopList.length===0&&manualShopItems.length===0)?
-              <div style={{padding:40,textAlign:"center"}}>
-                <div style={{fontSize:32,marginBottom:8}}>✅</div>
-                <div style={{fontSize:14,fontWeight:600,color:"#16a34a"}}>All items are sufficiently stocked!</div>
-                <div style={{fontSize:12,color:"#9ca3af",marginTop:4}}>Use the search above to manually add items to the list.</div>
-              </div>
-            :<>
-              {shopList.length>0&&<div style={{padding:"8px 16px",background:"#fef3c7",borderBottom:"1px solid #fde68a",fontSize:12,color:"#92400e"}}>⚠️ {shopList.length} item{shopList.length>1?"s":""} at or below reorder level</div>}
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Item","Code","UOM","Current Stock","Reorder","Max","Last Price","Order Qty","Est. Cost",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {shopList.map(item=>{
-                      const qty=shopQtys[item.id]??0;
-                      const cost=qty*parseFloat(item.lastUnitCost??0);
-                      return (
-                        <tr key={item.id}>
-                          <td style={s.td}><div style={{fontWeight:600}}>{item.name}</div>{item.genericName&&<div style={{fontSize:11,color:"#9ca3af"}}>{item.genericName}</div>}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{item.itemcode}</td>
-                          <td style={s.td}>{item.uom}</td>
-                          <td style={{...s.td,fontWeight:700,color:item.currentStock===0?"#dc2626":"#d97706"}}>{item.currentStock}</td>
-                          <td style={{...s.td,color:"#6b7280"}}>{item.reorderLevel}</td>
-                          <td style={{...s.td,color:"#6b7280"}}>{item.maxLevel??"—"}</td>
-                          <td style={s.td}>{item.lastUnitCost?`$${parseFloat(item.lastUnitCost).toFixed(2)}`:"—"}</td>
-                          <td style={s.td}><input type="number" min={0} value={qty} onChange={e=>setShopQtys(q=>({...q,[item.id]:parseInt(e.target.value)||0}))} style={{...s.input,width:80,textAlign:"center" as const}}/></td>
-                          <td style={{...s.td,fontWeight:600,color:"#6366f1"}}>{item.lastUnitCost?`$${cost.toFixed(2)}`:"—"}</td>
-                          <td style={s.td}><button onClick={()=>{setShopList(l=>l.filter(i=>i.id!==item.id));setShopQtys(q=>{const n={...q};delete n[item.id];return n;});}} style={{background:"#fee2e2",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#dc2626"}}>✕</button></td></tr>
-                      );
-                    })}
-                    {manualShopItems.length>0&&<>
-                      <tr><td colSpan={10} style={{...s.td,background:"#eef2ff",fontWeight:600,fontSize:11,color:"#6366f1",padding:"6px 12px"}}>MANUALLY ADDED ITEMS</td></tr>
-                      {manualShopItems.map(item=>{
-                        const qty=shopQtys[item.id]??1;
-                        const cost=qty*parseFloat(item.lastUnitCost??0);
+            {/* Cart items preview */}
+            {(shopList.length>0||manualShopItems.length>0) ? (
+              <div style={s.card}>
+                {shopList.length>0&&<div style={{padding:"8px 16px",background:"#fef3c7",fontSize:12,color:"#92400e",borderBottom:"1px solid #fde68a"}}>⚠️ {shopList.length} item{shopList.length>1?"s":""} at or below reorder level</div>}
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr>{["Item","Code","Supplier","UOM","Stock","Order Qty","Unit Cost","Est. Cost",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {[...shopList,...manualShopItems].map(item=>{
+                        const qty = shopQtys[item.id]??1;
+                        const cost = qty*parseFloat(item.lastUnitCost??0);
                         return (
                           <tr key={item.id}>
-                            <td style={s.td}><div style={{fontWeight:600}}>{item.name}</div>{item.genericName&&<div style={{fontSize:11,color:"#9ca3af"}}>{item.genericName}</div>}</td>
+                            <td style={{...s.td,fontWeight:600}}>{item.name}</td>
                             <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{item.itemcode}</td>
+                            <td style={{...s.td,fontSize:12,color:"#6366f1"}}>{item.supplierName??"—"}</td>
                             <td style={s.td}>{item.uom}</td>
-                            <td style={{...s.td,fontWeight:700}}>{item.currentStock}</td>
-                            <td style={{...s.td,color:"#6b7280"}}>{item.reorderLevel??"—"}</td>
-                            <td style={{...s.td,color:"#6b7280"}}>{item.maxLevel??"—"}</td>
+                            <td style={{...s.td,fontWeight:700,color:parseInt(item.currentStock)===0?"#dc2626":"#d97706"}}>{item.currentStock}</td>
+                            <td style={s.td}><input type="number" min={0} value={qty} onChange={e=>setShopQtys(q=>({...q,[item.id]:parseInt(e.target.value)||0}))} style={{...s.input,width:75,textAlign:"center" as const}}/></td>
                             <td style={s.td}>{item.lastUnitCost?`$${parseFloat(item.lastUnitCost).toFixed(2)}`:"—"}</td>
-                            <td style={s.td}><input type="number" min={1} value={qty} onChange={e=>setShopQtys(q=>({...q,[item.id]:parseInt(e.target.value)||1}))} style={{...s.input,width:80,textAlign:"center" as const}}/></td>
-                            <td style={{...s.td,fontWeight:600,color:"#6366f1"}}>{item.lastUnitCost?`$${cost.toFixed(2)}`:"—"}</td>
-                            <td style={s.td}><button onClick={()=>removeFromShopList(item.id)} style={{background:"#fee2e2",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#dc2626"}}>✕</button></td>
+                            <td style={{...s.td,fontWeight:600,color:"#6366f1"}}>${cost.toFixed(2)}</td>
+                            <td style={s.td}><button onClick={()=>{
+                              setShopList((l:any[])=>l.filter(i=>i.id!==item.id));
+                              setManualShopItems((m:any[])=>m.filter(i=>i.id!==item.id));
+                              setShopQtys(q=>{const n={...q};delete n[item.id];return n;});
+                            }} style={{background:"#fee2e2",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#dc2626"}}>✕</button></td>
                           </tr>
                         );
                       })}
-                    </>}
-                  </tbody>
-                </table>
+                    </tbody>
+                    <tfoot>
+                      <tr style={{background:"#f9fafb"}}>
+                        <td colSpan={7} style={{...s.td,fontWeight:700,textAlign:"right" as const}}>Total Est. Cost:</td>
+                        <td style={{...s.td,fontWeight:700,color:"#6366f1"}}>${[...shopList,...manualShopItems].reduce((sum,i)=>sum+(shopQtys[i.id]??0)*parseFloat(i.lastUnitCost??0),0).toFixed(2)}</td>
+                        <td style={s.td}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
-              <div style={{padding:"12px 16px",borderTop:"1px solid #f3f4f6",display:"flex",justifyContent:"flex-end"}}>
-                <span style={{fontSize:13,color:"#6b7280"}}>Total estimated cost: <strong style={{color:"#6366f1"}}>${[...shopList,...manualShopItems].reduce((sum,item)=>sum+(shopQtys[item.id]??0)*parseFloat(item.lastUnitCost??0),0).toFixed(2)}</strong></span>
+            ) : (
+              <div style={{...s.card,padding:40,textAlign:"center"}}>
+                <div style={{fontSize:36,marginBottom:8}}>🛒</div>
+                <div style={{fontSize:14,fontWeight:600,color:"#374151"}}>Cart is empty</div>
+                <div style={{fontSize:12,color:"#9ca3af",marginTop:4}}>Search for items above or click "Load Low Stock" to auto-fill</div>
               </div>
-            </>}
+            )}
           </div>
         )}
 
@@ -1234,266 +1292,8 @@ export default function PharmacyPage() {
           </div>
         )}
 
-        {/* EXPIRY ALERTS TAB */}
-        {tab==="expiry" && (
-          <div style={s.card}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:13,fontWeight:600}}>Expiry Alerts</span>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <span style={{fontSize:12,color:"#6b7280"}}>Show items expiring within:</span>
-                {[30,60,90,180].map(d=>(
-                  <button key={d} onClick={()=>setExpiryDays(d)}
-                    style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${expiryDays===d?"#6366f1":"#e5e7eb"}`,background:expiryDays===d?"#6366f1":"#f9fafb",color:expiryDays===d?"#fff":"#374151",cursor:"pointer"}}>
-                    {d}d
-                  </button>
-                ))}
-              </div>
-            </div>
-            {expiryLoading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading...</div>
-            :expiry.length===0?<div style={{padding:40,textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>✅</div><div style={{fontSize:14,fontWeight:600,color:"#16a34a"}}>No items expiring within {expiryDays} days!</div></div>
-            :<>
-              <div style={{padding:"8px 16px",background:"#fef3c7",borderBottom:"1px solid #fde68a",fontSize:12,color:"#92400e",display:"flex",gap:16}}>
-                <span>🔴 Expired: <strong>{expiry.filter(e=>e.status==="expired").length}</strong></span>
-                <span>🟠 Critical (&lt;30d): <strong>{expiry.filter(e=>e.status==="critical").length}</strong></span>
-                <span>🟡 Warning (&lt;90d): <strong>{expiry.filter(e=>e.status==="warning").length}</strong></span>
-              </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Item","Code","Batch","Qty","UOM","Expiry Date","Days Left","Warehouse","Status","Action"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {expiry.map(e=>{
-                      const statusStyles:Record<string,{bg:string,color:string,label:string}>={
-                        expired:{bg:"#fee2e2",color:"#991b1b",label:"Expired"},
-                        critical:{bg:"#fee2e2",color:"#991b1b",label:"Critical"},
-                        warning:{bg:"#fef3c7",color:"#92400e",label:"Warning"},
-                        ok:{bg:"#d1fae5",color:"#065f46",label:"OK"},
-                      };
-                      const st=statusStyles[e.status]??statusStyles.ok;
-                      return (
-                        <tr key={e.batchId}>
-                          <td style={{...s.td,fontWeight:600}}>{e.itemName}{e.controlled&&<span style={{fontSize:10,fontWeight:600,padding:"1px 5px",borderRadius:10,background:"#f5f3ff",color:"#7c3aed",marginLeft:4}}>Ctrl</span>}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{e.itemcode}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{e.batchNumber??"—"}</td>
-                          <td style={{...s.td,fontWeight:700}}>{e.quantity}</td>
-                          <td style={s.td}>{e.uom}</td>
-                          <td style={s.td}>{new Date(e.expiryDate).toLocaleDateString()}</td>
-                          <td style={{...s.td,fontWeight:700,color:e.daysLeft<=0?"#dc2626":e.daysLeft<=30?"#dc2626":e.daysLeft<=90?"#d97706":"#374151"}}>
-                            {e.daysLeft<=0?"Expired":`${e.daysLeft}d`}
-                          </td>
-                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{e.warehouseName}</td>
-                          <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color}}>{st.label}</span></td>
-                          <td style={s.td}>
-                            <button onClick={()=>{setQuarForm({batchId:e.batchId,itemId:e.itemId,itemName:e.itemName,batchNumber:e.batchNumber??"",reason:"Expiry - batch expired or near expiry",notes:"",quarantinedBy:""});setShowQuarModal(true);}}
-                              style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:6,background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a",cursor:"pointer"}}>
-                              Quarantine
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>}
-          </div>
-        )}
 
-        {/* ADJUSTMENTS TAB */}
-        {tab==="adjustments" && (
-          <div>
-            {showAdjModal&&(
-              <div style={s.overlay}><div style={{...s.modal,width:500}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Stock Adjustment / Wastage</h3>
-                  <button onClick={()=>setShowAdjModal(false)} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div style={{gridColumn:"1/-1",...s.fgroup}}>
-                    <label style={s.label}>Item *</label>
-                    <select style={s.input} value={adjForm.itemId} onChange={async e=>{
-                      const id=e.target.value;
-                      setAdjForm(f=>({...f,itemId:id,batchId:""}));
-                      if (id) {
-                        const res=await fetch(`/api/pharmacy/items/${id}/batches`);
-                        const d=await res.json();
-                        setAdjBatches(Array.isArray(d)?d:[]);
-                      }
-                    }}>
-                      <option value="">Select item</option>
-                      {items.map(i=><option key={i.id} value={i.id}>{i.name} ({i.itemcode})</option>)}
-                    </select>
-                  </div>
-                  <div style={s.fgroup}>
-                    <label style={s.label}>Warehouse *</label>
-                    <select style={s.input} value={adjForm.warehouseId} onChange={e=>setAdjForm(f=>({...f,warehouseId:e.target.value}))}>
-                      <option value="">Select warehouse</option>
-                      {pharmaWh.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
-                    </select>
-                  </div>
-                  <div style={s.fgroup}>
-                    <label style={s.label}>Batch (optional)</label>
-                    <select style={s.input} value={adjForm.batchId} onChange={e=>setAdjForm(f=>({...f,batchId:e.target.value}))}>
-                      <option value="">All batches</option>
-                      {adjBatches.map(b=><option key={b.id} value={b.id}>{b.batchNumber??"No batch"} — Qty: {b.quantity}</option>)}
-                    </select>
-                  </div>
-                  <div style={s.fgroup}>
-                    <label style={s.label}>Adjustment Qty *</label>
-                    <input type="number" style={s.input} value={adjForm.adjustmentQty} onChange={e=>setAdjForm(f=>({...f,adjustmentQty:e.target.value}))} placeholder="Use - for decrease e.g. -10"/>
-                  </div>
-                  <div style={{gridColumn:"1/-1",...s.fgroup}}>
-                    <label style={s.label}>Reason *</label>
-                    <select style={s.input} value={adjForm.reason} onChange={e=>setAdjForm(f=>({...f,reason:e.target.value}))}>
-                      <option value="">Select reason</option>
-                      {["Wastage","Damage","Expiry removal","Stock count correction","Theft/Loss","Lab use","Returned to supplier","Other"].map(r=><option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                  <div style={s.fgroup}>
-                    <label style={s.label}>Done By</label>
-                    <input style={s.input} value={adjForm.createdBy} onChange={e=>setAdjForm(f=>({...f,createdBy:e.target.value}))} placeholder="Your name"/>
-                  </div>
-                </div>
-                <div style={{marginTop:8,padding:"8px 12px",background:"#fef3c7",borderRadius:6,fontSize:12,color:"#92400e"}}>
-                  ⚠️ Use negative numbers to decrease stock (e.g. -10 for wastage). Use positive numbers to increase (e.g. +5 for found items).
-                </div>
-                <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}}>
-                  <button onClick={()=>setShowAdjModal(false)} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
-                  <button onClick={saveAdjustment} style={s.btn("purple")}>Save Adjustment</button>
-                </div>
-              </div></div>
-            )}
-            <div style={s.card}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:13,fontWeight:600}}>Stock Adjustments & Wastage Log</span>
-                <button onClick={()=>setShowAdjModal(true)} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.plus} size={13} color="#fff"/> New Adjustment</button>
-              </div>
-              {adjLoading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading...</div>
-              :adjustments.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No adjustments recorded yet</div>
-              :<div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Item","Code","Batch","Adjustment","Reason","Done By","Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {adjustments.map(a=>(
-                      <tr key={a.id}>
-                        <td style={{...s.td,fontWeight:600}}>{a.itemName??"—"}</td>
-                        <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{a.itemcode??"—"}</td>
-                        <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{a.batchNumber??"—"}</td>
-                        <td style={{...s.td,fontWeight:700,color:a.adjustmentQty>0?"#16a34a":"#dc2626",fontSize:15}}>
-                          {a.adjustmentQty>0?"+":""}{a.adjustmentQty} {a.uom}
-                        </td>
-                        <td style={s.td}>{a.reason}</td>
-                        <td style={{...s.td,fontSize:12}}>{a.createdBy??"—"}</td>
-                        <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(a.createdAt).toLocaleDateString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>}
-            </div>
-          </div>
-        )}
 
-        {/* QUARANTINE TAB */}
-        {tab==="quarantine" && (
-          <div>
-            {showQuarModal&&(
-              <div style={s.overlay}><div style={{...s.modal,width:500}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Quarantine Batch</h3>
-                  <button onClick={()=>{setShowQuarModal(false);setQuarBatchSearch("");setQuarBatchResults([]);}} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
-                </div>
-                {quarForm.batchId?(
-                  <div style={{padding:"10px 12px",background:"#f9fafb",borderRadius:8,marginBottom:12,fontSize:13}}>
-                    <strong>{quarForm.itemName}</strong> — Batch: {quarForm.batchNumber||"N/A"}
-                    <button onClick={()=>setQuarForm(f=>({...f,batchId:"",itemId:"",itemName:"",batchNumber:""}))} style={{marginLeft:8,fontSize:11,color:"#dc2626",background:"none",border:"none",cursor:"pointer"}}>✕ Clear</button>
-                  </div>
-                ):(
-                  <div style={{...s.fgroup,position:"relative"}}>
-                    <label style={s.label}>Search Item / Batch *</label>
-                    <input style={s.input} value={quarBatchSearch} onChange={e=>searchQuarBatches(e.target.value)} placeholder="Type item name..."/>
-                    {quarBatchResults.length>0&&(
-                      <div style={{position:"absolute",top:62,left:0,right:0,background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:100}}>
-                        {quarBatchResults.map(item=>(
-                          <div key={item.id} style={{padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f3f4f6",fontSize:13}}
-                            onClick={async()=>{
-                              const res=await fetch(`/api/pharmacy/items/${item.id}/batches`);
-                              const batches=await res.json();
-                              if (batches.length>0) {
-                                const b=batches[0];
-                                setQuarForm(f=>({...f,itemId:item.id,itemName:item.name,batchId:b.id,batchNumber:b.batchNumber??""}));
-                              } else {
-                                setQuarForm(f=>({...f,itemId:item.id,itemName:item.name}));
-                              }
-                              setQuarBatchSearch(""); setQuarBatchResults([]);
-                            }}
-                            onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")}
-                            onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
-                            <strong>{item.name}</strong> <span style={{fontSize:11,color:"#9ca3af"}}>{item.itemcode}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div style={{gridColumn:"1/-1",...s.fgroup}}>
-                    <label style={s.label}>Reason *</label>
-                    <select style={s.input} value={quarForm.reason} onChange={e=>setQuarForm(f=>({...f,reason:e.target.value}))}>
-                      <option value="">Select reason</option>
-                      {["Recall by manufacturer","Expiry/Near expiry","Quality issue","Contamination","Damaged packaging","Regulatory hold","Other"].map(r=><option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                  <div style={{gridColumn:"1/-1",...s.fgroup}}>
-                    <label style={s.label}>Notes</label>
-                    <input style={s.input} value={quarForm.notes} onChange={e=>setQuarForm(f=>({...f,notes:e.target.value}))} placeholder="Additional details..."/>
-                  </div>
-                  <div style={s.fgroup}>
-                    <label style={s.label}>Quarantined By</label>
-                    <input style={s.input} value={quarForm.quarantinedBy} onChange={e=>setQuarForm(f=>({...f,quarantinedBy:e.target.value}))} placeholder="Your name"/>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}}>
-                  <button onClick={()=>{setShowQuarModal(false);setQuarBatchSearch("");setQuarBatchResults([]);}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
-                  <button onClick={saveQuarantine} style={s.btn("red")}>Quarantine Batch</button>
-                </div>
-              </div></div>
-            )}
-            <div style={s.card}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:13,fontWeight:600}}>Batch Quarantine Register</span>
-                <button onClick={()=>setShowQuarModal(true)} style={{...s.btn("red"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.lock} size={13} color="#fff"/> Quarantine Batch</button>
-              </div>
-              {quarLoading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading...</div>
-              :quarantine.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No quarantined batches</div>
-              :<div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Item","Code","Batch","Qty","Reason","Quarantined By","Date","Status","Action"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {quarantine.map(q=>(
-                      <tr key={q.id}>
-                        <td style={{...s.td,fontWeight:600}}>{q.itemName??"—"}</td>
-                        <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{q.itemcode??"—"}</td>
-                        <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{q.batchNumber??"—"}</td>
-                        <td style={{...s.td,fontWeight:700}}>{q.quantity}</td>
-                        <td style={s.td}>{q.reason}</td>
-                        <td style={{...s.td,fontSize:12}}>{q.quarantinedBy??"—"}</td>
-                        <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(q.createdAt).toLocaleDateString()}</td>
-                        <td style={s.td}>
-                          <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:q.isResolved?"#d1fae5":"#fee2e2",color:q.isResolved?"#065f46":"#991b1b"}}>
-                            {q.isResolved?"Resolved":"Quarantined"}
-                          </span>
-                        </td>
-                        <td style={s.td}>
-                          {!q.isResolved&&<button onClick={()=>resolveQuarantine(q.id)} style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:6,background:"#d1fae5",color:"#065f46",border:"1px solid #a7f3d0",cursor:"pointer"}}>Resolve</button>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>}
-            </div>
-          </div>
-        )}
 
         {/* MANUFACTURERS TAB */}
         {tab==="manufacturers" && (
@@ -1636,6 +1436,141 @@ export default function PharmacyPage() {
           </div></div>
         )}
 
+        {/* STORAGE TAB */}
+        {tab==="storage" && (
+          <div>
+            {storageModal && (
+              <div style={s.overlay}><div style={{...s.modal,width:500}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                  <h3 style={{fontSize:16,fontWeight:600,margin:0}}>{storageModal==="edit"?"Edit Storage Location":"Add Storage Location"}</h3>
+                  <button onClick={()=>{setStorageModal(null);setStorageRow(null);setStorageForm({name:"",location:"",type:"shelf",temperature:"",notes:""}); }} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Location Name *</label><input style={s.input} value={storageForm.name} onChange={e=>setStorageForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Shelf A-1, Fridge 2"/></div>
+                  <div style={s.fgroup}><label style={s.label}>Physical Location</label><input style={s.input} value={storageForm.location} onChange={e=>setStorageForm(f=>({...f,location:e.target.value}))} placeholder="e.g. Room 3, Pharmacy Main"/></div>
+                  <div style={s.fgroup}><label style={s.label}>Type</label>
+                    <select style={s.input} value={storageForm.type} onChange={e=>setStorageForm(f=>({...f,type:e.target.value}))}>
+                      {["shelf","fridge","freezer","cabinet","room","controlled","drawer"].map(t=><option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
+                    </select>
+                  </div>
+                  <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Shelf / Section</label>
+                    <ShelfSearch value={storageForm.location??""} existingShelves={storageLocations.map(s=>s.name)} onChange={v=>setStorageForm(f=>({...f,location:v}))}/>
+                  </div>
+                  <div style={s.fgroup}><label style={s.label}>Temperature</label><input style={s.input} value={storageForm.temperature} onChange={e=>setStorageForm(f=>({...f,temperature:e.target.value}))} placeholder="e.g. 2-8°C, Room temp"/></div>
+                  <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Notes</label><input style={s.input} value={storageForm.notes} onChange={e=>setStorageForm(f=>({...f,notes:e.target.value}))}/></div>
+                </div>
+                <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
+                  <button onClick={()=>{setStorageModal(null);setStorageRow(null);}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
+                  <button onClick={async()=>{
+                    if (!storageForm.name.trim()) { showToast("Name required"); return; }
+                    const url = storageModal==="edit"?`/api/pharmacy/storage/${storageRow.id}`:"/api/pharmacy/storage";
+                    const method = storageModal==="edit"?"PATCH":"POST";
+                    setStorageModal(null); setStorageRow(null);
+                    const res = await fetch(url,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(storageForm)});
+                    if (res.ok) { fetchStorage(); showToast(storageModal==="edit"?"Updated!":"Added!"); }
+                    setStorageForm({name:"",location:"",type:"shelf",temperature:"",notes:""});
+                  }} style={s.btn("purple")}>{storageModal==="edit"?"Save Changes":"Add Location"}</button>
+                </div>
+              </div></div>
+            )}
+            {deleteStorage && (
+              <div style={s.overlay}><div style={{...s.modal,width:420}}>
+                <h3 style={{fontSize:15,fontWeight:600,marginBottom:8}}>Remove Storage Location</h3>
+                <p style={{fontSize:13,color:"#6b7280",marginBottom:20}}>Remove <strong>{deleteStorage.name}</strong>?</p>
+                <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                  <button onClick={()=>setDeleteStorage(null)} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
+                  <button onClick={async()=>{await fetch(`/api/pharmacy/storage/${deleteStorage.id}`,{method:"DELETE"});setDeleteStorage(null);fetchStorage();showToast("Removed");}} style={s.btn("red")}>Remove</button>
+                </div>
+              </div></div>
+            )}
+            <div style={s.card}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" as const}}>
+                <div style={{position:"relative",display:"flex",alignItems:"center",flex:1,maxWidth:320}}>
+                  <div style={{position:"absolute",left:10,pointerEvents:"none"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
+                  <input placeholder="Search storage locations..." value={storageSearch??""} onChange={e=>setStorageSearch(e.target.value)} style={{...s.input,paddingLeft:30}}/>
+                </div>
+                <span style={{fontSize:12,color:"#9ca3af"}}>{storageLocations.length} locations</span>
+                <div style={{marginLeft:"auto"}}>
+                  <button onClick={()=>{setStorageForm({name:"",location:"",type:"shelf",temperature:"",notes:""});setStorageRow(null);setStorageModal("add");}} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.plus} size={13} color="#fff"/> Add Location</button>
+                </div>
+              </div>
+              {storageLocations.length===0?(
+                <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No storage locations yet. Add one to get started.</div>
+              ):(
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr>{["Name","Physical Location","Type","Temperature","Notes","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {storageLocations.filter((loc:any)=>!storageSearch||(loc.name??"").toLowerCase().includes(storageSearch.toLowerCase())||(loc.location??"").toLowerCase().includes(storageSearch.toLowerCase())).map((loc:any)=>(
+                        <tr key={loc.id}>
+                          <td style={{...s.td,fontWeight:600}}>📍 {loc.name}</td>
+                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{loc.location||"—"}</td>
+                          <td style={s.td}>
+                            <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,
+                              background:loc.type==="fridge"?"#dbeafe":loc.type==="freezer"?"#e0f2fe":loc.type==="controlled"?"#fef3c7":loc.type==="cabinet"?"#f3f4f6":"#d1fae5",
+                              color:loc.type==="fridge"?"#1d4ed8":loc.type==="freezer"?"#0369a1":loc.type==="controlled"?"#92400e":loc.type==="cabinet"?"#374151":"#065f46"}}>
+                              {loc.type}
+                            </span>
+                          </td>
+                          <td style={{...s.td,fontSize:12}}>{loc.temperature||"—"}</td>
+                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{loc.notes||"—"}</td>
+                          <td style={s.td}>
+                            <div style={{display:"flex",gap:5}}>
+                              <button onClick={()=>{setStorageForm({name:loc.name,location:loc.location??"",type:loc.type??"shelf",temperature:loc.temperature??"",notes:loc.notes??""});setStorageRow(loc);setStorageModal("edit");}} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><Icon d={icons.edit} size={12} color="#2563eb"/></button>
+                              <button onClick={()=>setDeleteStorage(loc)} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* RECEIVE STOCK MODAL */}
+        {showReceiveModal && (
+          <div style={s.overlay}><div style={{...s.modal,width:560}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Receive Stock</h3>
+              <button onClick={()=>setShowReceiveModal(false)} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={{gridColumn:"1/-1",...s.fgroup}}>
+                <label style={s.label}>Item *</label>
+                <select style={s.input} value={receiveForm.itemId} onChange={e=>setReceiveForm(f=>({...f,itemId:e.target.value}))}>
+                  <option value="">Select item</option>
+                  {items.map(i=><option key={i.id} value={i.id}>{i.name} ({i.itemcode})</option>)}
+                </select>
+              </div>
+              <div style={s.fgroup}><label style={s.label}>Batch Number</label><input style={s.input} value={receiveForm.batchNumber} onChange={e=>setReceiveForm(f=>({...f,batchNumber:e.target.value}))} placeholder="e.g. LOT-2024-001"/></div>
+              <div style={s.fgroup}><label style={s.label}>Quantity *</label><input type="number" style={s.input} value={receiveForm.quantity} onChange={e=>setReceiveForm(f=>({...f,quantity:e.target.value}))}/></div>
+              <div style={s.fgroup}><label style={s.label}>Purchase Price</label><input type="number" step="0.01" style={s.input} value={receiveForm.unitCost} onChange={e=>setReceiveForm(f=>({...f,unitCost:e.target.value}))}/></div>
+              <div style={s.fgroup}><label style={s.label}>Selling Price</label><input type="number" step="0.01" style={s.input} value={receiveForm.sellingPrice} onChange={e=>setReceiveForm(f=>({...f,sellingPrice:e.target.value}))}/></div>
+              <div style={s.fgroup}><label style={s.label}>Expiry Date</label><input type="date" style={s.input} value={receiveForm.expiryDate} onChange={e=>setReceiveForm(f=>({...f,expiryDate:e.target.value}))}/></div>
+              <div style={s.fgroup}><label style={s.label}>Manufacture Date</label><input type="date" style={s.input} value={receiveForm.manufactureDate} onChange={e=>setReceiveForm(f=>({...f,manufactureDate:e.target.value}))}/></div>
+              <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Notes</label><input style={s.input} value={receiveForm.notes} onChange={e=>setReceiveForm(f=>({...f,notes:e.target.value}))} placeholder="Optional notes..."/></div>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
+              <button onClick={()=>setShowReceiveModal(false)} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
+              <button disabled={receivingLoading} onClick={async()=>{
+                if (!receiveForm.itemId||!receiveForm.quantity) { showToast("Item and quantity required"); return; }
+                setReceivingLoading(true);
+                const whId = pharmaWh[0]?.id;
+                if (!whId) { showToast("No pharmacy warehouse found"); setReceivingLoading(false); return; }
+                const res = await fetch("/api/stock/receive",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...receiveForm,warehouseId:whId,quantity:parseInt(receiveForm.quantity),unitCost:parseFloat(receiveForm.unitCost)||null,sellingPrice:parseFloat(receiveForm.sellingPrice)||null})});
+                const data = await res.json();
+                if (res.ok) { setShowReceiveModal(false); fetchAll(); showToast("Stock received!"); }
+                else showToast(data.error??"Failed to receive stock");
+                setReceivingLoading(false);
+              }} style={s.btn("purple")}>{receivingLoading?"Saving...":"Receive Stock"}</button>
+            </div>
+          </div></div>
+        )}
+
         {/* UOM TAB */}
         {tab==="uom" && (
           <div>
@@ -1645,7 +1580,7 @@ export default function PharmacyPage() {
                   <h3 style={{fontSize:16,fontWeight:600,margin:0}}>{uomModal==="edit"?"Edit Conversion":"Add UOM Conversion"}</h3>
                   <button onClick={()=>{setUomModal(null);setUomRow(null);setUomForm({item_id:"",from_uom:"",to_uom:"",factor:""}); }} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
                 </div>
-                <div style={{...s.fgroup}}>
+                <div style={s.fgroup}>
                   <label style={s.label}>Item (leave blank for global rule)</label>
                   <select style={s.input} value={uomForm.item_id} onChange={e=>setUomForm(f=>({...f,item_id:e.target.value}))}>
                     <option value="">Global — applies to all items</option>
@@ -1694,7 +1629,6 @@ export default function PharmacyPage() {
                 </div>
                 <button onClick={()=>{setUomForm({item_id:"",from_uom:"",to_uom:"",factor:""});setUomRow(null);setUomModal("add");}} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.plus} size={13} color="#fff"/> Add Conversion</button>
               </div>
-              <div style={{padding:"10px 14px",background:"#eef2ff",borderRadius:0,fontSize:12,color:"#4338ca"}}>💡 Factor = how many "to" units in 1 "from" unit. Example: 1 box = 10 strips, factor = 10</div>
               {uomConversions.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No conversions yet</div>:
               <table style={{width:"100%",borderCollapse:"collapse"}}>
                 <thead><tr>{["Item","From","Factor","To","Example","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
@@ -1722,7 +1656,7 @@ export default function PharmacyPage() {
         {tab==="reports" && (
           <div>
             <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" as const}}>
-              {([["stock","📦 Stock on Hand"],["consumption","📈 Consumption"],["expiry","⚠️ Expiry Report"]] as [string,string][]).map(([type,label])=>(
+              {([["stock","📦 Stock on Hand"],["consumption","📈 Consumption"]] as [string,string][]).map(([type,label])=>(
                 <button key={type} onClick={()=>setReportType(type as any)}
                   style={{padding:"8px 18px",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",
                     border:`1px solid ${reportType===type?"#6366f1":"#e5e7eb"}`,
@@ -1735,7 +1669,7 @@ export default function PharmacyPage() {
                 if (!pharmReports.length) return;
                 const NL = String.fromCharCode(10);
                 const headers = Object.keys(pharmReports[0]).join(",");
-                const rows = pharmReports.map(r=>Object.values(r).map(v=>String(v??"").replace(/\n/g," ")).join(","));
+                const rows = pharmReports.map(r=>Object.values(r).map(v=>String(v??"").split("\n").join(" ")).join(","));
 
                 const csv = [headers,...rows].join(NL);
                 const blob = new Blob([csv],{type:"text/csv"});
@@ -1747,13 +1681,11 @@ export default function PharmacyPage() {
             </div>
             <div style={s.card}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:13,fontWeight:600}}>
-                  {reportType==="stock"?"Stock on Hand":reportType==="consumption"?"Consumption Log":"Expiry Report"}
-                </span>
+                <span style={{fontSize:13,fontWeight:600}}>{reportType==="stock"?"Stock on Hand":"Consumption Log"}</span>
                 <span style={{fontSize:12,color:"#9ca3af"}}>{pharmReports.length} records</span>
               </div>
               {reportLoading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading report...</div>
-              :pharmReports.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No data found. <button onClick={fetchPharmReport} style={{color:"#6366f1",background:"none",border:"none",cursor:"pointer"}}>Refresh →</button></div>
+              :pharmReports.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No data. <button onClick={fetchPharmReport} style={{color:"#6366f1",background:"none",border:"none",cursor:"pointer"}}>Refresh →</button></div>
               :<div style={{overflowX:"auto"}}>
                 {reportType==="stock" && (
                   <table style={{width:"100%",borderCollapse:"collapse"}}>
@@ -1763,65 +1695,16 @@ export default function PharmacyPage() {
                         const avail=parseInt(r.totalStock||0)-parseInt(r.reservedStock||0);
                         const val=avail*(parseFloat(r.unitCost||0));
                         const sc=avail===0?{bg:"#fee2e2",color:"#991b1b",label:"Out"}:avail<=parseInt(r.reorderLevel||0)?{bg:"#fef3c7",color:"#92400e",label:"Low"}:{bg:"#d1fae5",color:"#065f46",label:"OK"};
-                        return (<tr key={i}>
-                          <td style={{...s.td,fontWeight:600}}>{r.name}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td>
-                          <td style={s.td}>{r.uom}</td>
-                          <td style={{...s.td,fontWeight:700}}>{r.totalStock||0}</td>
-                          <td style={{...s.td,color:"#d97706"}}>{r.reservedStock||0}</td>
-                          <td style={{...s.td,fontWeight:700,color:sc.color}}>{avail}</td>
-                          <td style={{...s.td,color:"#6b7280"}}>{r.reorderLevel||0}</td>
-                          <td style={s.td}>{r.unitCost?`$${parseFloat(r.unitCost).toFixed(2)}`:"—"}</td>
-                          <td style={{...s.td,color:"#16a34a",fontWeight:600}}>{r.sellingPrice?`$${parseFloat(r.sellingPrice).toFixed(2)}`:"—"}</td>
-                          <td style={{...s.td,fontWeight:600,color:"#6366f1"}}>${val.toFixed(2)}</td>
-                          <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:sc.bg,color:sc.color}}>{sc.label}</span></td>
-                        </tr>);
+                        return (<tr key={i}><td style={{...s.td,fontWeight:600}}>{r.name}</td><td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td><td style={s.td}>{r.uom}</td><td style={{...s.td,fontWeight:700}}>{r.totalStock||0}</td><td style={{...s.td,color:"#d97706"}}>{r.reservedStock||0}</td><td style={{...s.td,fontWeight:700,color:sc.color}}>{avail}</td><td style={{...s.td,color:"#6b7280"}}>{r.reorderLevel||0}</td><td style={s.td}>{r.unitCost?`$${parseFloat(r.unitCost).toFixed(2)}`:"—"}</td><td style={{...s.td,color:"#16a34a",fontWeight:600}}>{r.sellingPrice?`$${parseFloat(r.sellingPrice).toFixed(2)}`:"—"}</td><td style={{...s.td,fontWeight:600,color:"#6366f1"}}>${val.toFixed(2)}</td><td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:sc.bg,color:sc.color}}>{sc.label}</span></td></tr>);
                       })}
                     </tbody>
-                    <tfoot>
-                      <tr style={{background:"#f9fafb"}}>
-                        <td colSpan={9} style={{...s.td,fontWeight:700,textAlign:"right" as const}}>Total Inventory Value:</td>
-                        <td style={{...s.td,fontWeight:700,color:"#6366f1",fontSize:15}}>${pharmReports.reduce((sum:number,r:any)=>{const a=parseInt(r.totalStock||0)-parseInt(r.reservedStock||0);return sum+a*(parseFloat(r.unitCost||0));},0).toFixed(2)}</td>
-                        <td style={s.td}></td>
-                      </tr>
-                    </tfoot>
+                    <tfoot><tr style={{background:"#f9fafb"}}><td colSpan={9} style={{...s.td,fontWeight:700,textAlign:"right" as const}}>Total Value:</td><td style={{...s.td,fontWeight:700,color:"#6366f1",fontSize:15}}>${pharmReports.reduce((sum:number,r:any)=>{const a=parseInt(r.totalStock||0)-parseInt(r.reservedStock||0);return sum+a*(parseFloat(r.unitCost||0));},0).toFixed(2)}</td><td style={s.td}></td></tr></tfoot>
                   </table>
                 )}
                 {reportType==="consumption" && (
                   <table style={{width:"100%",borderCollapse:"collapse"}}>
                     <thead><tr>{["Item","Code","Type","Total Qty","Transactions","Last Movement"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {pharmReports.map((r:any,i:number)=>(
-                        <tr key={i}>
-                          <td style={{...s.td,fontWeight:600}}>{r.itemname||r.name}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td>
-                          <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8"}}>{r.transactiontype||r.type}</span></td>
-                          <td style={{...s.td,fontWeight:700}}>{r.totalqty||r.quantity}</td>
-                          <td style={s.td}>{r.txcount||"—"}</td>
-                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.lastmoved?new Date(r.lastmoved).toLocaleDateString():"—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-                {reportType==="expiry" && (
-                  <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Item","Code","Batch","Qty","Expiry Date","Days Left","Status"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {pharmReports.map((r:any,i:number)=>{
-                        const days=r.daysleft??Math.ceil((new Date(r.expirydate||r.expiryDate).getTime()-Date.now())/86400000);
-                        const st=days<=0?{bg:"#fee2e2",color:"#991b1b",label:"Expired"}:days<=30?{bg:"#fee2e2",color:"#991b1b",label:"Critical"}:days<=90?{bg:"#fef3c7",color:"#92400e",label:"Warning"}:{bg:"#d1fae5",color:"#065f46",label:"OK"};
-                        return (<tr key={i}>
-                          <td style={{...s.td,fontWeight:600}}>{r.itemname||r.name}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{r.batchnumber||r.batchNumber||"—"}</td>
-                          <td style={{...s.td,fontWeight:700}}>{r.quantity}</td>
-                          <td style={s.td}>{new Date(r.expirydate||r.expiryDate).toLocaleDateString()}</td>
-                          <td style={{...s.td,fontWeight:700,color:st.color}}>{days<=0?"Expired":`${days}d`}</td>
-                          <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color}}>{st.label}</span></td>
-                        </tr>);
-                      })}
-                    </tbody>
+                    <tbody>{pharmReports.map((r:any,i:number)=>(<tr key={i}><td style={{...s.td,fontWeight:600}}>{r.itemname||r.name}</td><td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{r.itemcode}</td><td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8"}}>{r.transactiontype||r.type}</span></td><td style={{...s.td,fontWeight:700}}>{r.totalqty||r.quantity}</td><td style={s.td}>{r.txcount||"—"}</td><td style={{...s.td,fontSize:12,color:"#6b7280"}}>{r.lastmoved?new Date(r.lastmoved).toLocaleDateString():"—"}</td></tr>))}</tbody>
                   </table>
                 )}
               </div>}
@@ -1831,147 +1714,111 @@ export default function PharmacyPage() {
 
         {/* ORDERS TAB */}
         {tab==="orders" && (
-          <div>
-            {/* Order detail modal */}
-            {selectedOrder && (
-              <div style={s.overlay}><div style={{...s.modal,width:820}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <div>
-                    <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Prescription — {selectedOrder.orderId}</h3>
-                    <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>
-                      Patient: <strong>{selectedOrder.patientName ?? "Unknown"}</strong>
-                      {selectedOrder.nationalId && <span style={{marginLeft:8}}>ID: {selectedOrder.nationalId}</span>}
-                    </div>
-                  </div>
-                  <button onClick={()=>{setSelectedOrder(null);setOrderItems([]);}} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
-                </div>
-                {orderItemsLoading ? <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading items...</div> : (
-                  <>
-                    <table style={{width:"100%",borderCollapse:"collapse"}}>
-                      <thead><tr>{["Drug","Dosage","Qty","Matched Item","Stock","Cost","Status"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                      <tbody>
-                        {orderItems.map((item:any,i:number)=>(
-                          <tr key={i}>
-                            <td style={{...s.td,fontWeight:600}}>{item.drugName}</td>
-                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{item.dosage??"—"}</td>
-                            <td style={{...s.td,fontWeight:700}}>{item.quantity}</td>
-                            <td style={s.td}>{item.inventoryItem?<span style={{color:"#16a34a",fontWeight:600}}>{item.inventoryItem.name}</span>:<span style={{color:"#dc2626",fontSize:12}}>Not found</span>}</td>
-                            <td style={{...s.td,fontWeight:700,color:item.inventoryItem?.totalStock>0?"#16a34a":"#dc2626"}}>{item.inventoryItem?.totalStock??"—"}</td>
-                            <td style={s.td}>{item.inventoryItem?.unitCost?`$${parseFloat(item.inventoryItem.unitCost).toFixed(2)}`:"—"}</td>
-                            <td style={s.td}>
-                              {item.status==="dispensed"
-                                ? <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#d1fae5",color:"#065f46"}}>Dispensed</span>
-                                : item.inventoryItem
-                                  ? <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8"}}>Ready</span>
-                                  : <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#fee2e2",color:"#991b1b"}}>Not matched</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {orderItems.some((i:any)=>i.inventoryItem && i.status!=="dispensed") && (
-                      <div style={{marginTop:16,display:"flex",justifyContent:"flex-end"}}>
-                        <button
-                          disabled={dispensingOrder}
-                          onClick={()=>dispenseItems(orderItems,true)}
-                          style={{...s.btn("green"),display:"flex",alignItems:"center",gap:6}}>
-                          {dispensingOrder?"Dispensing...":"✓ Dispense All Available"}
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div></div>
-            )}
-
-            <div style={s.card}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" as const}}>
-                <div style={{position:"relative",display:"flex",alignItems:"center",flex:1,maxWidth:320}}>
-                  <div style={{position:"absolute",left:10,pointerEvents:"none"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
-                  <input placeholder="Search by patient name or national ID..." value={orderSearch}
-                    onChange={e=>setOrderSearch(e.target.value)}
-                    style={{...s.input,paddingLeft:30}}/>
-                </div>
-                <div style={{display:"flex",gap:6}}>
-                  {["PENDING","DISPENSED","ALL"].map(st=>(
-                    <button key={st} onClick={()=>setOrderStatus(st)}
-                      style={{padding:"4px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",
-                        border:`1px solid ${orderStatus===st?"#6366f1":"#e5e7eb"}`,
-                        background:orderStatus===st?"#6366f1":"#f9fafb",
-                        color:orderStatus===st?"#fff":"#374151"}}>
-                      {st}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={fetchOrders} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}><Icon d={icons.refresh} size={13} color="#374151"/></button>
-                <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{orders.length} orders</span>
+          <div style={s.card}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" as const}}>
+              <span style={{fontSize:13,fontWeight:600}}>Shop Orders</span>
+              <div style={{display:"flex",gap:6}}>
+                {["ALL","PENDING","DONE","CANCELLED","DELAYED"].map(st=>(
+                  <button key={st} onClick={()=>setOrderStatus(st)}
+                    style={{padding:"4px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",
+                      border:`1px solid ${orderStatus===st?"#6366f1":"#e5e7eb"}`,
+                      background:orderStatus===st?"#6366f1":"#f9fafb",
+                      color:orderStatus===st?"#fff":"#374151"}}>
+                    {st}
+                  </button>
+                ))}
               </div>
-
-              {ordersLoading ? <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading orders...</div>
-              : orders.length===0 ? (
-                <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>
-                  <div style={{fontSize:32,marginBottom:8}}>📋</div>
-                  <div style={{fontSize:14,fontWeight:600}}>No {orderStatus==="ALL"?"":"pending "} prescriptions found</div>
-                  <div style={{fontSize:12,marginTop:4}}>Prescriptions come from the clinical system automatically</div>
-                </div>
-              ) : (
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Order ID","Patient","National ID","Items","Status","Date","Action"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {orders.map((order:any)=>(
-                        <tr key={order.orderId}>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6366f1"}}>{order.orderId}</td>
-                          <td style={{...s.td,fontWeight:600}}>{order.patientName??"Unknown Patient"}</td>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{order.nationalId??"—"}</td>
-                          <td style={{...s.td,fontWeight:600}}>{order.itemCount??0} items</td>
-                          <td style={s.td}>
-                            <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,
-                              background:order.status==="DISPENSED"?"#d1fae5":order.status==="PENDING"?"#fef3c7":"#f3f4f6",
-                              color:order.status==="DISPENSED"?"#065f46":order.status==="PENDING"?"#92400e":"#374151"}}>
-                              {order.status}
-                            </span>
-                          </td>
-                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{order.createdAt?new Date(order.createdAt).toLocaleDateString():"—"}</td>
-                          <td style={s.td}>
-                            <button onClick={()=>loadOrderItems(order)}
-                              style={{...s.btn("purple"),fontSize:11,padding:"4px 10px",display:"flex",alignItems:"center",gap:4}}>
-                              Dispense →
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <button onClick={fetchOrders} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}><Icon d={icons.refresh} size={13} color="#374151"/></button>
+              <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{orders.length} orders</span>
             </div>
+            {ordersLoading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading...</div>
+            :orders.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><div style={{fontSize:14,fontWeight:600}}>No orders yet</div><div style={{fontSize:12,marginTop:4}}>Create orders from the Shop List tab</div></div>
+            :<div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>{["Order","Supplier","Created By","Items","Total","Created","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {orders.filter((o:any)=>orderStatus==="ALL"||o.status===orderStatus||(orderStatus==="DELAYED"&&Math.floor((Date.now()-new Date(o.createdat).getTime())/86400000)>3&&o.status==="PENDING")).map((order:any)=>{
+                    const daysSince = Math.floor((Date.now()-new Date(order.createdat).getTime())/86400000);
+                    const isDelayed = order.status==="PENDING" && daysSince > 3;
+                    const status = isDelayed ? "DELAYED" : order.status;
+                    const statusColors:Record<string,{bg:string,color:string}>={PENDING:{bg:"#fef3c7",color:"#92400e"},DONE:{bg:"#d1fae5",color:"#065f46"},CANCELLED:{bg:"#fee2e2",color:"#991b1b"},DELAYED:{bg:"#fee2e2",color:"#991b1b"}};
+                    const sc = statusColors[status]??{bg:"#f3f4f6",color:"#374151"};
+                    return (
+                      <tr key={order.id}>
+                        <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6366f1"}}>{order.ordernumber??order.id?.slice(0,8)}</td>
+                        <td style={{...s.td,fontWeight:600}}>{order.supplier??"—"}</td>
+                        <td style={s.td}>{order.createdby??"—"}</td>
+                        <td style={{...s.td,fontWeight:600}}>{order.itemcount??0} items</td>
+                        <td style={{...s.td,color:"#16a34a",fontWeight:600}}>{order.totalamount?`$${parseFloat(order.totalamount).toFixed(2)}`:"—"}</td>
+                        <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(order.createdat).toLocaleDateString()}{isDelayed&&<div style={{fontSize:10,color:"#dc2626",fontWeight:600}}>{daysSince}d ago</div>}</td>
+                        <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{isDelayed?"⏰ DELAYED":status}</span></td>
+                        <td style={s.td}>
+                          <div style={{display:"flex",gap:5}}>
+                            {["PENDING","DONE","CANCELLED"].map(st=>(
+                              <button key={st} onClick={async()=>{
+                                const res = await fetch(`/api/pharmacy/shoporders/${order.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:st})});
+                                if(res.ok){fetchOrders();showToast(`Marked as ${st}`);}
+                              }} style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:600,cursor:"pointer",
+                                border:`1px solid ${order.status===st?"transparent":"#e5e7eb"}`,
+                                background:order.status===st?(st==="DONE"?"#d1fae5":st==="CANCELLED"?"#fee2e2":"#fef3c7"):"#f9fafb",
+                                color:order.status===st?(st==="DONE"?"#065f46":st==="CANCELLED"?"#991b1b":"#92400e"):"#6b7280"}}>
+                                {st}
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>}
           </div>
         )}
 
-
-
-
       </div>
 
+      {/* View Item Modal */}
+      {viewItem && (
+        <div style={s.overlay}><div style={{...s.modal,width:500}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Item Details</h3>
+            <button onClick={()=>setViewItem(null)} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            {[["Name",viewItem.name],["Generic",viewItem.genericName??"—"],["Code",viewItem.itemcode],["Type",viewItem.itemType],["UOM",viewItem.uom],["Stock",viewItem.totalStock],["Purchase Price",viewItem.unitCost?`$${parseFloat(viewItem.unitCost).toFixed(2)}`:"—"],["Selling Price",viewItem.sellingPrice?`$${parseFloat(viewItem.sellingPrice).toFixed(2)}`:"—"],["Supplier",viewItem.supplierName??"—"],["Manufacturer",viewItem.manufacturer??"—"],["Storage Location",viewItem.storageLocation??viewItem.storage_location??"—"],["Shelf",viewItem.shelf??viewItem.shelfName??"—"]].map(([label,value])=>(
+              <div key={label as string} style={{background:"#f9fafb",borderRadius:8,padding:"8px 12px"}}>
+                <div style={{fontSize:11,color:"#6b7280",marginBottom:2}}>{label}</div>
+                <div style={{fontSize:13,fontWeight:600,color:"#111827"}}>{value}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{borderTop:"1px solid #f3f4f6",paddingTop:16}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Add to Shop List</div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <div style={{flex:1}}>
+                <label style={s.label}>Quantity</label>
+                <input type="number" min={1} defaultValue={1} id="viewItemQty" style={{...s.input,width:100}}/>
+              </div>
+              <button onClick={()=>{
+                const qty = parseInt((document.getElementById("viewItemQty") as HTMLInputElement)?.value)||1;
+                addToShopList(viewItem, qty);
+                setViewItem(null);
+                showToast(`${viewItem.name} added to shop list`);
+              }} style={{...s.btn("purple"),marginTop:16,display:"flex",alignItems:"center",gap:6}}>
+                <Icon d={icons.plus} size={13} color="#fff"/> Add to Cart
+              </button>
+            </div>
+          </div>
+        </div></div>
+      )}
+
       {/* Modals */}
-      {showDispense&&<DispenseModal stores={stores} onClose={()=>setShowDispense(false)} onSuccess={()=>{fetchAll();showToast("Drug dispensed!");}}/>}
       {showAddItem&&<ItemModal warehouses={pharmaWh} manufacturers={manufacturers} onClose={()=>setShowAddItem(false)} onSuccess={()=>{fetchAll();showToast("Item added!");}}/>}
       {editItem&&<ItemModal item={editItem} warehouses={pharmaWh} manufacturers={manufacturers} onClose={()=>setEditItem(null)} onSuccess={()=>{fetchAll();showToast("Item updated!");}}/>}
       {deleteItem&&<ConfirmModal item={deleteItem} onClose={()=>setDeleteItem(null)} onSuccess={()=>{fetchAll();showToast("Item deactivated");}}/>}
       {batchItem&&<BatchModal item={batchItem} onClose={()=>setBatchItem(null)}/>}
-      {showImportModal&&<ImportDrugModal onClose={()=>setShowImportModal(false)} onImport={(drug:any)=>{
-        setDrugPrefill(drug);
-        setShowImportModal(false);
-        if (drug._isUpdate) {
-          // Local item — open wizard in update mode, skip to inventory step
-          setShowAddDrug(true);
-        } else {
-          // Global drug — open wizard in add mode
-          setShowAddDrug(true);
-        }
-      }}/>}
-      {showAddDrug&&<AddDrugToPharmacyWizard warehouses={pharmaWh} prefill={drugPrefill} onClose={()=>{setShowAddDrug(false);setDrugPrefill(null);}} onSuccess={()=>{fetchAll();showToast("Drug added to pharmacy!");setShowAddDrug(false);setDrugPrefill(null);}}/>}
+      {showAddDrug&&<AddDrugToPharmacyWizard warehouses={pharmaWh} prefill={drugPrefill} onClose={()=>{setShowAddDrug(false);setDrugPrefill(null);}} onSuccess={()=>{fetchAll();showToast("Medicine added!");setShowAddDrug(false);setDrugPrefill(null);}}/>}
       {toast&&<div style={{position:"fixed",bottom:24,right:24,background:"#16a34a",color:"#fff",padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:2000}}>✓ {toast}</div>}
     </div>
   );
