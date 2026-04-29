@@ -5,9 +5,9 @@ const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const order = await pool.query(`SELECT * FROM hospital_orders WHERE id=$1`, [id]);
-    const items = await pool.query(`SELECT * FROM hospital_order_items_new WHERE order_id=$1 ORDER BY createdat`, [id]);
-    return NextResponse.json({ order: order.rows[0], items: items.rows });
+    const note  = await pool.query(`SELECT * FROM hospital_purchase_notes WHERE id=$1`, [id]);
+    const items = await pool.query(`SELECT * FROM hospital_purchase_note_items WHERE note_id=$1 ORDER BY createdat`, [id]);
+    return NextResponse.json({ note: note.rows[0], items: items.rows });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
@@ -16,6 +16,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { status } = await req.json();
-  await pool.query(`UPDATE hospital_orders SET status=$1, updatedat=NOW() WHERE id=$2`, [status, id]);
+  await pool.query(`UPDATE hospital_purchase_notes SET status=$1, updatedat=NOW() WHERE id=$2`, [status, id]);
   return NextResponse.json({ success: true });
 }
