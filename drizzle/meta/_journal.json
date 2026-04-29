@@ -36,6 +36,13 @@
       "when": 1773747848467,
       "tag": "0004_awesome_synch",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777370243414,
+      "tag": "0005_faulty_raza",
+      "breakpoints": true
     }
   ]
 }
