@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
-const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ connectionString: process.env.TIBBNA_API_URL, ssl: { rejectUnauthorized: false } });
 const WS = "cec4d702-6dae-4ea5-9a30-ef17842c00fd";
 
 export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") ?? "";
   const r = await pool.query(
     `SELECT s.*, d.name AS department_name FROM hospital_storage_locations s
-     LEFT JOIN hospital_departments d ON d.id = s.department_id
+     LEFT JOIN departments d ON d.departmentid = s.department_id
      WHERE s.workspace_id=$1 AND s.isactive=true
      AND ($2='' OR s.name ILIKE $2 OR s.location ILIKE $2) ORDER BY s.name`,
     [WS, `%${search}%`]

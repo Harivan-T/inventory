@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
-const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ connectionString: process.env.TIBBNA_API_URL, ssl: { rejectUnauthorized: false } });
 const WS = "cec4d702-6dae-4ea5-9a30-ef17842c00fd";
 
 export async function GET(req: NextRequest) {
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
         d.name AS department_name
        FROM hospital_items i
        LEFT JOIN hospital_stock s ON s.item_id = i.id
-       LEFT JOIN hospital_departments d ON d.id = s.department_id
+       LEFT JOIN departments d ON d.departmentid = s.department_id
        WHERE i.workspace_id=$1 AND i.isactive=true
          AND ($2='' OR s.department_id::text=$2)
        ORDER BY i.name`,
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       `SELECT h.item_name, h.action_type, SUM(h.quantity) AS total_qty,
         COUNT(*) AS tx_count, MAX(h.createdat) AS last_moved, d.name AS department_name
        FROM hospital_history h
-       LEFT JOIN hospital_departments d ON d.id = h.department_id
+       LEFT JOIN departments d ON d.departmentid = h.department_id
        WHERE h.workspace_id=$1 AND h.action_type IN ('DISPENSE','STOCK_OUT')
          AND ($2='' OR h.department_id::text=$2)
        GROUP BY h.item_name, h.action_type, d.name

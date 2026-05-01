@@ -139,7 +139,8 @@ function AddItemWizard({onClose,onSuccess,departments,storageLocations,manufactu
     name:"",generic_name:"",itemtype:"supply",uom:"piece",
     manufacturer:"",supplier_id:"",supplier_name:"",
     barcode:"",storage_location:"",storage_type:"",strength:"",
-    min_level:"5",max_level:"100",unit_cost:"",selling_price:"",notes:""
+    min_level:"5",max_level:"100",unit_cost:"",selling_price:"",notes:"",
+    expiry_date:"",manufacture_date:"",
   });
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState("");
@@ -281,6 +282,7 @@ function AddItemWizard({onClose,onSuccess,departments,storageLocations,manufactu
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div style={s.fgroup}>{fl("Minimum Level")}<input type="number" min="0" style={s.input} value={form.min_level} onChange={e=>set("min_level",e.target.value)}/></div>
                 <div style={s.fgroup}>{fl("Maximum Level")}<input type="number" min="0" style={s.input} value={form.max_level} onChange={e=>set("max_level",e.target.value)}/></div>
+                <div style={s.fgroup}>{fl("Expiry Date")}<input type="date" style={s.input} value={form.expiry_date} onChange={e=>set("expiry_date",e.target.value)}/></div>
               </div>
             </div>
             <div style={{gridColumn:"1/-1",...s.fgroup}}>{fl("Notes")}<input style={s.input} value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="Optional notes..."/></div>
@@ -1301,12 +1303,20 @@ function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
 }
 
 // ── Fulfill Requests Section ──────────────────────────────────────────────
-function FulfillRequestsSection({transfers,departments,onRefresh}:{transfers:any[];departments:any[];onRefresh:()=>void}){
-  const requests=transfers.filter(t=>(t.sent_by||"").startsWith("REQUEST by"));
+function FulfillRequestsSection({departments,onRefresh}:{departments:any[];onRefresh:()=>void}){
+  const [requests,setRequests]=useState<any[]>([]);
   const [expandedId,setExpandedId]=useState<string|null>(null);
   const [itemsMap,setItemsMap]=useState<Record<string,any[]>>({});
   const [sentByMap,setSentByMap]=useState<Record<string,string>>({});
   const [saving,setSaving]=useState<string|null>(null);
+
+  const fetchRequests=useCallback(async()=>{
+    const r=await fetch("/api/hospital/transfers?status=REQUESTED");
+    const d=await r.json();
+    setRequests(Array.isArray(d)?d:[]);
+  },[]);
+
+  useEffect(()=>{fetchRequests();},[fetchRequests]);
 
   const loadItems=async(transferId:string)=>{
     if(itemsMap[transferId])return;
@@ -1335,10 +1345,12 @@ function FulfillRequestsSection({transfers,departments,onRefresh}:{transfers:any
         method:"PATCH",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
+          status:"PENDING",
           sentBy,
           items:items.map(i=>({id:i.id,quantity:i.quantity})),
         })
       });
+      fetchRequests();
       onRefresh();
       setExpandedId(null);
     }finally{setSaving(null);}
@@ -1456,6 +1468,16 @@ export default function HospitalPage(){
   const [history,setHistory]=useState<any[]>([]);
   const [historyTotal,setHistoryTotal]=useState(0);
   const [historyPage,setHistoryPage]=useState(1);
+  const [historySearchType,setHistorySearchType]=useState<"item_name"|"item_number"|"order_number">("item_name");
+  const [historyQuery,setHistoryQuery]=useState("");
+  const [historySearchResults,setHistorySearchResults]=useState<{type:string;results:any[]}|null>(null);
+  const [historySearching,setHistorySearching]=useState(false);
+  const [historySelectedItem,setHistorySelectedItem]=useState<any|null>(null);
+  const [historyItemOrders,setHistoryItemOrders]=useState<any[]>([]);
+  const [historyItemOrdersLoading,setHistoryItemOrdersLoading]=useState(false);
+  const [historySelectedOrder,setHistorySelectedOrder]=useState<any|null>(null);
+  const [historyOrderDetail,setHistoryOrderDetail]=useState<{receipt:any;items:any[]}|null>(null);
+  const [historyOrderDetailLoading,setHistoryOrderDetailLoading]=useState(false);
   const [reports,setReports]=useState<any[]>([]);
   const [reportType,setReportType]=useState<"stock"|"consumption">("stock");
   const [hospitalOrders,setHospitalOrders]=useState<any[]>([]);
@@ -1516,30 +1538,17 @@ export default function HospitalPage(){
 
   const fetchItems=useCallback(async()=>{setLoading(true);try{const r=await fetch(`/api/hospital/items?search=${encodeURIComponent(search)}`);const d=await r.json();setItems(Array.isArray(d)?d:[]);}catch(e){console.error('fetchItems error:',e);}finally{setLoading(false);}},[search]);
   const fetchStock=useCallback(async()=>{try{const r=await fetch("/api/hospital/stock");const d=await r.json();setStock(Array.isArray(d)?d:[]);}catch(e){console.error('fetchStock:',e);}},[]);
-  const fetchDepartments=useCallback(async()=>{try{const r=await fetch("/api/tibbna/departments");const d=await r.json();if(Array.isArray(d)&&d.length>0){setDepartments(d);}else{const r2=await fetch("/api/hospital/departments");const d2=await r2.json();setDepartments(Array.isArray(d2)?d2:[]);}}catch(e){console.error("fetchDepartments:",e);}},[]);
+  const fetchDepartments=useCallback(async()=>{try{const r=await fetch("/api/hospital/departments");const d=await r.json();setDepartments(Array.isArray(d)?d:[]);}catch(e){console.error("fetchDepartments:",e);}},[]);
   const fetchManufacturers=useCallback(async()=>{try{const r=await fetch("/api/hospital/manufacturers");const d=await r.json();setManufacturers(Array.isArray(d)?d:[]);}catch(e){console.error('fetchMfr:',e);}},[]);
   const fetchStorage=useCallback(async()=>{const r=await fetch("/api/hospital/storage");const d=await r.json();setStorageLocations(Array.isArray(d)?d:[]);},[]);
   const fetchTransfers=useCallback(async()=>{const r=await fetch(`/api/hospital/transfers?status=${transferStatus==="ALL"?"":transferStatus}`);const d=await r.json();setTransfers(Array.isArray(d)?d:[]);},[transferStatus]);
   const fetchHistory=useCallback(async()=>{const r=await fetch(`/api/hospital/history?page=${historyPage}`);const d=await r.json();setHistory(d.rows??[]);setHistoryTotal(d.total??0);},[historyPage]);
+  const searchHistoryOrders=useCallback(async()=>{if(!historyQuery.trim())return;setHistorySearching(true);setHistorySearchResults(null);setHistorySelectedItem(null);setHistoryItemOrders([]);try{const r=await fetch(`/api/hospital/history/search?type=${historySearchType}&q=${encodeURIComponent(historyQuery)}`);const d=await r.json();setHistorySearchResults(d);}finally{setHistorySearching(false);}},[historyQuery,historySearchType]);
+  const fetchItemOrders=useCallback(async(itemId:string)=>{setHistoryItemOrdersLoading(true);try{const r=await fetch(`/api/hospital/history/item-orders?item_id=${itemId}`);const d=await r.json();setHistoryItemOrders(Array.isArray(d)?d:[]);}finally{setHistoryItemOrdersLoading(false);}},[]);
+  const fetchOrderDetail=useCallback(async(receiptId:string)=>{setHistoryOrderDetailLoading(true);try{const r=await fetch(`/api/hospital/goods-receipt/${receiptId}`);const d=await r.json();setHistoryOrderDetail(d);}finally{setHistoryOrderDetailLoading(false);}},[]);
   const fetchReports=useCallback(async()=>{const r=await fetch(`/api/hospital/reports?type=${reportType}`);const d=await r.json();setReports(Array.isArray(d)?d:[]);},[reportType]);
   const fetchTibbnaSuppliers=useCallback(async()=>{try{const r=await fetch("/api/tibbna/suppliers");const d=await r.json();setTibbnaSuppliers(Array.isArray(d)?d:[]);}catch(e){console.error('fetchSuppliers:',e);}},[]);
-  const fetchTibbnaDepartments=useCallback(async()=>{
-    try{
-      const r=await fetch("/api/tibbna/departments");
-      const d=await r.json();
-      if(Array.isArray(d)&&d.length>0){
-        setDepartments(d);
-      } else {
-        // fallback to hospital_departments
-        const r2=await fetch("/api/hospital/departments");
-        const d2=await r2.json();
-        setDepartments(Array.isArray(d2)?d2:[]);
-      }
-    }catch(e){
-      console.error("fetchDepts:",e);
-      try{const r2=await fetch("/api/hospital/departments");const d2=await r2.json();setDepartments(Array.isArray(d2)?d2:[]);}catch{}
-    }
-  },[]);
+  const fetchTibbnaDepartments=useCallback(async()=>{try{const r=await fetch("/api/hospital/departments");const d=await r.json();setDepartments(Array.isArray(d)?d:[]);}catch(e){console.error("fetchDepts:",e);}},[]);
   const addToOrderCart=(item:any)=>{setOrderCart(c=>{if(c.find((i:any)=>i.id===item.id)){showToast(`${item.name} already in cart`);return c;}showToast(`${item.name} added to order cart`);return[...c,{...item,qty:1,unitCost:String(item.unit_cost||'')}];});};
   const fetchHospitalOrders=useCallback(async()=>{try{const r=await fetch(`/api/hospital/orders?status=${orderStatusFilter==="ALL"?"":orderStatusFilter}`);const d=await r.json();setHospitalOrders(Array.isArray(d)?d:[]);}catch(e){console.error(e);}},[orderStatusFilter]);
   const fetchPurchaseNotes=useCallback(async()=>{try{const r=await fetch(`/api/hospital/purchase-notes?status=${pnStatusFilter==="ALL"?"":pnStatusFilter}`);const d=await r.json();setPurchaseNotes(Array.isArray(d)?d:[]);}catch(e){console.error(e);}},[pnStatusFilter]);
@@ -1718,7 +1727,7 @@ export default function HospitalPage(){
                           <tr key={i}>
                             <td style={{...s.td,fontWeight:600}}>{row.name}</td>
                             <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{row.itemcode}</td>
-                            <td style={s.td}><span style={s.badge("#eef2ff","#6366f1")}>{row.department_name??"Main"}</span></td>
+                            <td style={s.td}><span style={s.badge(row.department_name?"#eef2ff":"#f0fdf4",row.department_name?"#6366f1":"#16a34a")}>{row.department_name??"🏥 Central Store"}</span></td>
                             <td style={{...s.td,fontWeight:700}}>{row.quantity||0}</td>
                             <td style={{...s.td,fontWeight:700,color:stc.color}}>{avail}</td>
                             <td style={{...s.td,color:"#6b7280"}}>{row.reorder_level||0}</td>
@@ -1739,10 +1748,180 @@ export default function HospitalPage(){
         )}
 
         {/* ── HISTORY TAB ───────────────────────────────────────────────── */}
-        {tab==="history"&&(
+        {tab==="history"&&(<>
+          {/* ── Order History Search ────────────────────────────────────── */}
           <div style={s.card}>
             <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" as const}}>
-              <span style={{fontSize:13,fontWeight:600}}>Transaction History</span>
+              <span style={{fontSize:13,fontWeight:600}}>Order History Search</span>
+            </div>
+            <div style={{padding:16}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap" as const}}>
+                <select style={{...s.input,width:160,flexShrink:0}} value={historySearchType} onChange={e=>setHistorySearchType(e.target.value as any)}>
+                  <option value="item_name">Item Name</option>
+                  <option value="item_number">Item Code</option>
+                  <option value="order_number">Order Number</option>
+                </select>
+                <input style={{...s.input,flex:1,minWidth:200}} placeholder={historySearchType==="order_number"?"e.g. ORD-12345678":historySearchType==="item_number"?"e.g. HSP-0001":"e.g. Amoxicillin"} value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")searchHistoryOrders();}}/>
+                <button style={s.btn("purple")} onClick={searchHistoryOrders} disabled={historySearching}>{historySearching?"Searching…":"Search"}</button>
+                {(historySearchResults||historySelectedItem)&&(<button style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}} onClick={()=>{setHistorySearchResults(null);setHistorySelectedItem(null);setHistoryItemOrders([]);setHistoryQuery("");}}>Clear</button>)}
+              </div>
+            </div>
+
+            {/* Search results: list of items */}
+            {historySearchResults?.type==="item"&&!historySelectedItem&&(
+              <div style={{padding:"0 16px 16px"}}>
+                {historySearchResults.results.length===0?<div style={{color:"#9ca3af",fontSize:13}}>No items found.</div>:(
+                  <div style={{display:"flex",flexDirection:"column" as const,gap:6}}>
+                    {historySearchResults.results.map((item:any)=>(
+                      <div key={item.id} onClick={()=>{setHistorySelectedItem(item);fetchItemOrders(item.id);}} style={{padding:"10px 14px",borderRadius:8,border:"1px solid #e5e7eb",cursor:"pointer",display:"flex",alignItems:"center",gap:12,background:"#fafafa"}} onMouseEnter={e=>(e.currentTarget.style.background="#eef2ff")} onMouseLeave={e=>(e.currentTarget.style.background="#fafafa")}>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:13}}>{item.name}</div>
+                          {item.generic_name&&<div style={{fontSize:12,color:"#6b7280"}}>{item.generic_name}</div>}
+                        </div>
+                        <span style={s.badge("#eef2ff","#6366f1")}>{item.itemcode??"-"}</span>
+                        <span style={s.badge("#f3f4f6","#374151")}>{item.itemtype}</span>
+                        <span style={{fontSize:12,color:"#9ca3af"}}>→</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Search results: direct order match */}
+            {historySearchResults?.type==="order"&&(
+              <div style={{padding:"0 16px 16px"}}>
+                {historySearchResults.results.length===0?<div style={{color:"#9ca3af",fontSize:13}}>No orders found.</div>:(
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr>{["Order No","Date","Supplier","Ordered By","Status","Items",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {historySearchResults.results.map((o:any)=>(
+                          <tr key={o.id} style={{cursor:"pointer"}} onClick={()=>setHistorySelectedOrder(o)} onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")} onMouseLeave={e=>(e.currentTarget.style.background="")}>
+                            <td style={{...s.td,fontFamily:"monospace",fontWeight:600}}>{o.order_number}</td>
+                            <td style={{...s.td,fontSize:12}}>{o.order_date?new Date(o.order_date).toLocaleDateString():"—"}</td>
+                            <td style={s.td}>{o.supplier_name??"—"}</td>
+                            <td style={s.td}>{o.ordered_by??"—"}</td>
+                            <td style={s.td}><span style={s.badge(statusColors[o.status]?.bg??"#f3f4f6",statusColors[o.status]?.color??"#374151")}>{o.status}</span></td>
+                            <td style={{...s.td,color:"#6b7280"}}>{o.item_count??0} items</td>
+                            <td style={s.td}><button style={s.btn("purple")} onClick={e=>{e.stopPropagation();setHistorySelectedOrder(o);}}>View</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Item orders table */}
+            {historySelectedItem&&(
+              <div style={{padding:"0 16px 16px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                  <button style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:4}} onClick={()=>{setHistorySelectedItem(null);setHistoryItemOrders([]);}}>← Back</button>
+                  <div>
+                    <span style={{fontWeight:600,fontSize:13}}>{historySelectedItem.name}</span>
+                    {historySelectedItem.itemcode&&<span style={{...s.badge("#eef2ff","#6366f1"),marginLeft:8}}>{historySelectedItem.itemcode}</span>}
+                  </div>
+                </div>
+                {historyItemOrdersLoading?<div style={{padding:24,textAlign:"center",color:"#9ca3af"}}>Loading orders…</div>:historyItemOrders.length===0?<div style={{padding:24,textAlign:"center",color:"#9ca3af"}}>No orders found for this item.</div>:(
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr>{["Order No","Order Date","Receiving Date","Registered By","Qty Ordered","Qty Received","Store","Supplier",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {historyItemOrders.map((row:any,i:number)=>(
+                          <tr key={i} style={{cursor:row.receipt_id?"pointer":"default"}} onMouseEnter={e=>{if(row.receipt_id)e.currentTarget.style.background="#f9fafb";}} onMouseLeave={e=>(e.currentTarget.style.background="")} onClick={()=>{if(row.receipt_id){setHistorySelectedOrder(row);fetchOrderDetail(row.receipt_id);}}}>
+                            <td style={{...s.td,fontFamily:"monospace",fontWeight:600}}>{row.order_number??"—"}</td>
+                            <td style={{...s.td,fontSize:12}}>{row.order_date?new Date(row.order_date).toLocaleDateString():"—"}</td>
+                            <td style={{...s.td,fontSize:12}}>{row.receipt_date?new Date(row.receipt_date).toLocaleDateString():"Not received"}</td>
+                            <td style={s.td}>{row.ordered_by??"—"}</td>
+                            <td style={{...s.td,fontWeight:700}}>{row.ordered_qty??0} {row.uom}</td>
+                            <td style={{...s.td,fontWeight:700,color:row.received_qty>0?"#16a34a":"#9ca3af"}}>{row.received_qty??0}</td>
+                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{row.store_name??"—"}</td>
+                            <td style={s.td}>{row.supplier_name??"—"}</td>
+                            <td style={s.td}>{row.receipt_id&&<button style={s.btn("purple")} onClick={e=>{e.stopPropagation();setHistorySelectedOrder(row);fetchOrderDetail(row.receipt_id);}}>View GRN</button>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Order / GRN Detail Modal ────────────────────────────────── */}
+          {historySelectedOrder&&(
+            <div style={s.overlay} onClick={()=>{setHistorySelectedOrder(null);setHistoryOrderDetail(null);}}>
+              <div style={{...s.modal,width:780,maxHeight:"88vh",overflowY:"auto" as const,padding:0}} onClick={e=>e.stopPropagation()}>
+                <div style={{padding:"16px 20px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <span style={{fontSize:15,fontWeight:700}}>Order Detail</span>
+                    <span style={{...s.badge("#eef2ff","#6366f1"),marginLeft:10,fontFamily:"monospace"}}>{historySelectedOrder.order_number}</span>
+                  </div>
+                  <button onClick={()=>{setHistorySelectedOrder(null);setHistoryOrderDetail(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#6b7280"}}>✕</button>
+                </div>
+
+                {/* Order info */}
+                <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,borderBottom:"1px solid #f3f4f6"}}>
+                  <div><div style={s.label}>Ordered By</div><div style={{fontSize:13}}>{historySelectedOrder.ordered_by??historySelectedOrder.receipt_received_by??"—"}</div></div>
+                  <div><div style={s.label}>Order Date</div><div style={{fontSize:13}}>{historySelectedOrder.order_date?new Date(historySelectedOrder.order_date).toLocaleDateString():"—"}</div></div>
+                  <div><div style={s.label}>Supplier</div><div style={{fontSize:13}}>{historySelectedOrder.supplier_name??"—"}</div></div>
+                  <div><div style={s.label}>Status</div><div><span style={s.badge(statusColors[historySelectedOrder.order_status??historySelectedOrder.status]?.bg??"#f3f4f6",statusColors[historySelectedOrder.order_status??historySelectedOrder.status]?.color??"#374151")}>{historySelectedOrder.order_status??historySelectedOrder.status??"—"}</span></div></div>
+                  <div><div style={s.label}>Store</div><div style={{fontSize:13}}>{historySelectedOrder.store_name??"—"}</div></div>
+                  {historySelectedOrder.receipt_number&&<div><div style={s.label}>Receipt No</div><div style={{fontFamily:"monospace",fontSize:13}}>{historySelectedOrder.receipt_number}</div></div>}
+                  {historySelectedOrder.receipt_date&&<div><div style={s.label}>Received Date</div><div style={{fontSize:13}}>{new Date(historySelectedOrder.receipt_date).toLocaleDateString()}</div></div>}
+                  {historySelectedOrder.receipt_received_by&&<div><div style={s.label}>Received By</div><div style={{fontSize:13}}>{historySelectedOrder.receipt_received_by}</div></div>}
+                </div>
+
+                {/* GRN delivery details */}
+                {historyOrderDetailLoading&&<div style={{padding:32,textAlign:"center",color:"#9ca3af"}}>Loading delivery details…</div>}
+                {historyOrderDetail&&(
+                  <div style={{padding:"16px 20px"}}>
+                    <div style={{fontSize:13,fontWeight:600,marginBottom:10,color:"#374151"}}>Delivery Details (Goods Receipt)</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14,background:"#f9fafb",borderRadius:8,padding:12}}>
+                      <div><div style={s.label}>Receipt Number</div><div style={{fontFamily:"monospace",fontSize:13}}>{historyOrderDetail.receipt?.receipt_number??"—"}</div></div>
+                      <div><div style={s.label}>Supplier</div><div style={{fontSize:13}}>{historyOrderDetail.receipt?.supplier_name??"—"}</div></div>
+                      <div><div style={s.label}>Received By</div><div style={{fontSize:13}}>{historyOrderDetail.receipt?.received_by??"—"}</div></div>
+                      <div><div style={s.label}>Receipt Date</div><div style={{fontSize:13}}>{historyOrderDetail.receipt?.receipt_date?new Date(historyOrderDetail.receipt.receipt_date).toLocaleDateString():"—"}</div></div>
+                      <div><div style={s.label}>Status</div><div><span style={s.badge(statusColors[historyOrderDetail.receipt?.status]?.bg??"#f3f4f6",statusColors[historyOrderDetail.receipt?.status]?.color??"#374151")}>{historyOrderDetail.receipt?.status??"—"}</span></div></div>
+                      {historyOrderDetail.receipt?.notes&&<div style={{gridColumn:"1/-1"}}><div style={s.label}>Notes</div><div style={{fontSize:13,color:"#6b7280"}}>{historyOrderDetail.receipt.notes}</div></div>}
+                    </div>
+                    {historyOrderDetail.items?.length>0&&(<>
+                      <div style={{fontSize:13,fontWeight:600,marginBottom:8,color:"#374151"}}>Items Received</div>
+                      <div style={{overflowX:"auto"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse"}}>
+                          <thead><tr>{["Item","UOM","Ordered","Received","Unit Cost","Batch","Lot","Expiry"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {historyOrderDetail.items.map((it:any,i:number)=>(
+                              <tr key={i}>
+                                <td style={{...s.td,fontWeight:600}}>{it.item_name??"—"}</td>
+                                <td style={s.td}>{it.uom??"—"}</td>
+                                <td style={s.td}>{it.ordered_qty??0}</td>
+                                <td style={{...s.td,fontWeight:700,color:it.received_qty>0?"#16a34a":"#9ca3af"}}>{it.received_qty??0}</td>
+                                <td style={s.td}>{it.unit_cost?`$${parseFloat(it.unit_cost).toFixed(2)}`:"—"}</td>
+                                <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{it.batch_number??"—"}</td>
+                                <td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{it.lot_number??"—"}</td>
+                                <td style={{...s.td,fontSize:12}}>{it.expiry_date?new Date(it.expiry_date).toLocaleDateString():"—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>)}
+                  </div>
+                )}
+                {!historyOrderDetailLoading&&!historyOrderDetail&&historySelectedOrder.receipt_id===undefined&&(
+                  <div style={{padding:24,textAlign:"center",color:"#9ca3af",fontSize:13}}>No goods receipt recorded for this order yet.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Stock Transaction Log ───────────────────────────────────── */}
+          <div style={s.card}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" as const}}>
+              <span style={{fontSize:13,fontWeight:600}}>Stock Transaction Log</span>
               <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{historyTotal} total</span>
             </div>
             {history.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No history yet</div>:(
@@ -1760,7 +1939,7 @@ export default function HospitalPage(){
               </div>
             )}
           </div>
-        )}
+        </>)}
 
         {/* ── MANUFACTURERS TAB ─────────────────────────────────────────── */}
         {tab==="manufacturers"&&(
@@ -1959,7 +2138,7 @@ export default function HospitalPage(){
         {/* ── TRANSFERS TAB ─────────────────────────────────────────────── */}
         {tab==="transfers"&&(
           <div>
-            <FulfillRequestsSection transfers={transfers} departments={departments} onRefresh={()=>{fetchTransfers();fetchStock();showToast("Transfer sent! Department can now receive it.");}}/>
+            <FulfillRequestsSection departments={departments} onRefresh={()=>{fetchTransfers();fetchStock();showToast("Transfer dispatched! Department can now receive it.");}}/>
 
             {/* Regular (non-request) transfers */}
             <div style={s.card}>

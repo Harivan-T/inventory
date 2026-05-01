@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
-const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ connectionString: process.env.TIBBNA_API_URL, ssl: { rejectUnauthorized: false } });
 const WS = "cec4d702-6dae-4ea5-9a30-ef17842c00fd";
 
 export async function GET(req: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     `SELECT d.*, i.name AS item_name, i.uom, dep.name AS department_name
      FROM hospital_dispenses d
      LEFT JOIN hospital_items i ON i.id = d.item_id
-     LEFT JOIN hospital_departments dep ON dep.id = d.department_id
+     LEFT JOIN departments dep ON dep.departmentid = d.department_id
      WHERE d.workspace_id = $1
        AND ($2 = '' OR d.department_id::text = $2)
      ORDER BY d.createdat DESC LIMIT 200`,

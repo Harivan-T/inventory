@@ -250,9 +250,14 @@ export default function DepartmentPage({params}:{params:Promise<{id:string}>}){
     const rb=receiving[transferId];
     if(!rb?.receivedBy.trim()){showToast("Enter receiver name");return;}
     setReceiveLoading(transferId);
-    await fetch(`/api/hospital/transfers/${transferId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"RECEIVED",receivedBy:rb.receivedBy})});
-    showToast("✓ Received! Stock updated.");
-    setReceiveLoading(null);fetchTransfers();fetchStock();
+    try{
+      const res=await fetch(`/api/hospital/transfers/${transferId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"RECEIVED",receivedBy:rb.receivedBy})});
+      const data=await res.json();
+      if(!res.ok){showToast(data.error||"Receive failed");return;}
+      showToast("✓ Received! Stock updated.");
+      fetchTransfers();fetchStock();
+    }catch(e:any){showToast(e?.message||"Network error");}
+    finally{setReceiveLoading(null);}
   };
 
   const deptType=dept?.type??"general";

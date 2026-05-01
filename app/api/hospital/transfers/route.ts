@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
-const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ connectionString: process.env.TIBBNA_API_URL, ssl: { rejectUnauthorized: false } });
 const WS = "cec4d702-6dae-4ea5-9a30-ef17842c00fd";
 
 export async function GET(req: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     `SELECT t.*, d.name AS department_name,
       (SELECT COUNT(*) FROM hospital_transfer_items ti WHERE ti.transfer_id = t.id)::int AS item_count
      FROM hospital_transfers t
-     LEFT JOIN hospital_departments d ON d.id = t.to_department_id
+     LEFT JOIN departments d ON d.departmentid = t.to_department_id
      WHERE t.workspace_id = $1
        AND ($2 = '' OR t.to_department_id::text = $2)
        AND ($3 = '' OR t.status = $3)
@@ -21,14 +21,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { toDepartmentId, sentBy, notes, items } = await req.json();
+  const { toDepartmentId, sentBy, notes, items, isRequest } = await req.json();
   if (!toDepartmentId || !items?.length) return NextResponse.json({ error: "Department and items required" }, { status: 400 });
 
   const tNum = `TRF-${Date.now().toString().slice(-8)}`;
+  const transferStatus = isRequest ? 'REQUESTED' : 'PENDING';
   const r = await pool.query(
     `INSERT INTO hospital_transfers (id, workspace_id, transfer_number, to_department_id, sent_by, status, notes, createdat, updatedat)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, 'PENDING', $5, NOW(), NOW()) RETURNING *`,
-    [WS, tNum, toDepartmentId, sentBy || null, notes || null]
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING *`,
+    [WS, tNum, toDepartmentId, sentBy || null, transferStatus, notes || null]
   );
   const transferId = r.rows[0].id;
 
