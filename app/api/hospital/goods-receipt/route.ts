@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
-const pool = new Pool({ connectionString: process.env.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ connectionString: process.env.TIBBNA_API_URL, ssl: { rejectUnauthorized: false } });
 const WS = "cec4d702-6dae-4ea5-9a30-ef17842c00fd";
+const CENTRAL = '00000000-0000-0000-0000-000000000000'; // hospital central store
 
 export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get("status") ?? "";
@@ -29,15 +30,7 @@ export async function POST(req: NextRequest) {
     if (!receivedBy?.trim()) return NextResponse.json({ error: "Received by is required" }, { status: 400 });
     if (!items?.length)      return NextResponse.json({ error: "No items" }, { status: 400 });
 
-    // Auto-find Main Store department
-    const deptResult = await pool.query(
-      `SELECT id FROM hospital_departments
-       WHERE workspace_id=$1 AND (LOWER(name) LIKE '%main%store%' OR LOWER(name) LIKE '%main store%' OR type='general')
-       ORDER BY CASE WHEN LOWER(name) LIKE '%main%store%' THEN 0 ELSE 1 END
-       LIMIT 1`,
-      [WS]
-    );
-    const mainStoreId = deptResult.rows[0]?.id || null;
+    const mainStoreId = CENTRAL; // all received goods go to hospital central stock
 
     // Determine status
     const allComplete = items.every((i: any) => parseInt(i.receivedQty) >= parseInt(i.orderedQty));
