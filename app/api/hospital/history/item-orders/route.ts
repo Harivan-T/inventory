@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
          gr.received_by     AS receipt_received_by,
          gr.status          AS receipt_status,
          COALESCE(gri.received_qty, 0) AS received_qty,
-         store.name         AS store_name
+         'Hospital Central Store'::text AS store_name
        FROM hospital_order_items_new oi
        JOIN hospital_orders o
          ON o.id = oi.order_id AND o.workspace_id = $1
@@ -34,12 +34,6 @@ export async function GET(req: NextRequest) {
          ON gr.order_id = o.id
        LEFT JOIN hospital_goods_receipt_items gri
          ON gri.receipt_id = gr.id AND gri.item_id = oi.item_id
-       LEFT JOIN LATERAL (
-         SELECT name FROM departments
-         WHERE LOWER(name) LIKE '%main%'
-         ORDER BY CASE WHEN LOWER(name) LIKE '%main%store%' THEN 0 ELSE 1 END
-         LIMIT 1
-       ) store ON true
        WHERE oi.item_id = $2
        ORDER BY o.createdat DESC`,
       [WS, itemId]

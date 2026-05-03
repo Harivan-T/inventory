@@ -50,16 +50,20 @@ export async function POST(req: NextRequest) {
 
     const receiptId = r.rows[0].id;
 
+    // Ensure delivered_total column exists
+    await pool.query(`
+      ALTER TABLE hospital_goods_receipt_items
+      ADD COLUMN IF NOT EXISTS delivered_total NUMERIC(12,2)
+    `).catch(()=>{});
+
     for (const item of items) {
       await pool.query(
         `INSERT INTO hospital_goods_receipt_items
-           (id,receipt_id,item_id,item_name,uom,ordered_qty,received_qty,unit_cost,
-            batch_number,lot_number,expiry_date,manufacture_date,notes,createdat)
-         VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())`,
+           (id,receipt_id,item_id,item_name,uom,ordered_qty,received_qty,delivered_total,notes,createdat)
+         VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
         [receiptId, item.itemId||null, item.itemName||null, item.uom||null,
-         item.orderedQty||0, item.receivedQty||0, item.unitCost||null,
-         item.batchNumber||null, item.lotNumber||null,
-         item.expiryDate||null, item.manufactureDate||null, item.notes||null]
+         item.orderedQty||0, item.receivedQty||0,
+         item.deliveredTotal||null, item.notes||null]
       );
 
       // Update stock in Main Store
@@ -73,10 +77,9 @@ export async function POST(req: NextRequest) {
         );
         await pool.query(
           `INSERT INTO hospital_batches
-             (id,item_id,department_id,batch_number,lot_number,quantity,unit_cost,expiry_date,manufacture_date,createdat)
-           VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
-          [item.itemId, mainStoreId, item.batchNumber||null, item.lotNumber||null,
-           parseInt(item.receivedQty), item.unitCost||null, item.expiryDate||null, item.manufactureDate||null]
+             (id,item_id,department_id,quantity,createdat)
+           VALUES (gen_random_uuid(),$1,$2,$3,NOW())`,
+          [item.itemId, mainStoreId, parseInt(item.receivedQty)]
         );
         await pool.query(
           `INSERT INTO hospital_history

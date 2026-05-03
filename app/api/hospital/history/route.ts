@@ -10,20 +10,25 @@ export async function GET(req: NextRequest) {
   const limit   = 20;
   const offset  = (page - 1) * limit;
 
-  const r = await pool.query(
-    `SELECT h.*, d.name AS department_name
-     FROM hospital_history h
-     LEFT JOIN departments d ON d.departmentid = h.department_id
-     WHERE h.workspace_id = $1
-       AND ($2 = '' OR h.department_id::text = $2)
-       AND ($3 = '' OR h.action_type = $3)
-     ORDER BY h.createdat DESC
-     LIMIT $4 OFFSET $5`,
-    [WS, deptId, type, limit, offset]
-  );
-  const total = await pool.query(
-    `SELECT COUNT(*) FROM hospital_history WHERE workspace_id=$1 AND ($2='' OR department_id::text=$2) AND ($3='' OR action_type=$3)`,
-    [WS, deptId, type]
-  );
-  return NextResponse.json({ rows: r.rows, total: parseInt(total.rows[0].count) });
+  try {
+    const r = await pool.query(
+      `SELECT h.*, d.name AS department_name
+       FROM hospital_history h
+       LEFT JOIN departments d ON d.departmentid = h.department_id
+       WHERE h.workspace_id = $1
+         AND ($2 = '' OR h.department_id::text = $2)
+         AND ($3 = '' OR h.action_type = $3)
+       ORDER BY h.createdat DESC
+       LIMIT $4 OFFSET $5`,
+      [WS, deptId, type, limit, offset]
+    );
+    const total = await pool.query(
+      `SELECT COUNT(*) FROM hospital_history WHERE workspace_id=$1 AND ($2='' OR department_id::text=$2) AND ($3='' OR action_type=$3)`,
+      [WS, deptId, type]
+    );
+    return NextResponse.json({ rows: r.rows, total: parseInt(total.rows[0].count) });
+  } catch (e: any) {
+    console.error("GET /api/hospital/history error:", e.message);
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }

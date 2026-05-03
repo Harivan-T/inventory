@@ -567,7 +567,7 @@ function ReceiveOrderModal({orderDetail,departments,onClose,onSuccess}:{orderDet
                       <td style={{...s.td,color:"#6b7280",fontSize:12}}>{l.uom}</td>
                       <td style={{...s.td,fontWeight:700,textAlign:"center" as const}}>{ordered}</td>
                       <td style={s.td}>
-                        <input type="number" min={0} value={l.receivedQty}
+                        <input type="number" min={0} value={l.receivedQty??0}
                           onChange={e=>updateLine(l.id,"receivedQty",e.target.value)}
                           style={{...s.input,width:75,textAlign:"center" as const,padding:"5px 8px",borderColor:diff<0?"#f97316":diff>0?"#16a34a":"#d1d5db"}}/>
                       </td>
@@ -692,7 +692,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
   orders:any[];departments:any[];tibbnaSuppliers:any[];purchaseNote?:any;
   onClose:()=>void;onSuccess:(msg:string)=>void;
 }){
-  type GRLine={itemId:string;itemName:string;uom:string;orderedQty:number;receivedQty:number;unitCost:string;batchNumber:string;lotNumber:string;expiryDate:string;};
+  type GRLine={itemId:string;itemName:string;uom:string;orderedQty:number;receivedQty:number;deliveredTotal:string;};
   type Mode="order"|"standalone";
   const [mode,setMode]=useState<Mode>("order");
   const [step,setStep]=useState<"select"|"review">("select");
@@ -730,8 +730,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
       itemId:i.item_id||"",itemName:i.item_name||"",uom:i.uom||"piece",
       orderedQty:parseInt(i.ordered_qty)||0,
       receivedQty:parseInt(i.delivered_qty)||0,
-      unitCost:String(i.unit_cost||""),
-      batchNumber:i.batch_number||"",lotNumber:i.lot_number||"",expiryDate:i.expiry_date||"",
+      deliveredTotal:i.delivered_total!=null?String(i.delivered_total):"",
     })));
     // find and set order detail
     const matchOrder=orders.find(o=>o.id===pn.order_id);
@@ -749,22 +748,29 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
 
   const addStandaloneLine=(item:any)=>{
     if(lines.find(l=>l.itemId===item.id))return;
-    setLines(prev=>[...prev,{itemId:item.id,itemName:item.name,uom:item.uom||"piece",orderedQty:0,receivedQty:1,unitCost:String(item.unit_cost||""),batchNumber:"",lotNumber:"",expiryDate:""}]);
+    setLines(prev=>[...prev,{itemId:item.id,itemName:item.name,uom:item.uom||"piece",orderedQty:0,receivedQty:1,deliveredTotal:""}]);
     setItemQ("");setItemResults([]);
   };
   const removeLine=(idx:number)=>setLines(prev=>prev.filter((_,i)=>i!==idx));
-  const updateLine=(idx:number,field:string,val:string)=>setLines(prev=>prev.map((l,i)=>i===idx?{...l,[field]:val}:l));
+  const updateLine=(idx:number,field:string,val:string)=>setLines(prev=>prev.map((l,i)=>i===idx?{...l,[field]:field==="receivedQty"?parseInt(val)||0:val}:l));
 
   const loadOrder=async(orderId:string)=>{
     setLoadingOrder(true);
     try{
-      const r=await fetch(`/api/hospital/orders/${orderId}`);
+      const [r,pnR]=await Promise.all([
+        fetch(`/api/hospital/orders/${orderId}`),
+        fetch(`/api/hospital/purchase-notes?order_id=${orderId}`),
+      ]);
       const d=await r.json();
+      const pnData=pnR.ok?await pnR.json():null;
+      // Build a map of item_id → delivered_total from the linked PN (if any)
+      const dnTotals:Record<string,string>={};
+      if(pnData?.items){pnData.items.forEach((i:any)=>{if(i.item_id&&i.delivered_total!=null)dnTotals[i.item_id]=String(i.delivered_total);});}
       setOrderDetail(d);
       setLines((d.items||[]).map((i:any)=>({
         itemId:i.item_id||"",itemName:i.item_name||"",uom:i.uom||"piece",
         orderedQty:parseInt(i.ordered_qty)||0,receivedQty:parseInt(i.ordered_qty)||0,
-        unitCost:String(i.unit_cost||""),batchNumber:"",lotNumber:"",expiryDate:"",
+        deliveredTotal:dnTotals[i.item_id]||"",
       })));
       setStep("review");
     }catch{setErr("Failed to load order");}
@@ -788,9 +794,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
           items:finalLines.map(l=>({
             itemId:l.itemId||null,itemName:l.itemName,uom:l.uom,
             orderedQty:l.orderedQty,receivedQty:l.receivedQty,
-            unitCost:parseFloat(l.unitCost)||null,
-            batchNumber:l.batchNumber||null,lotNumber:l.lotNumber||null,
-            expiryDate:l.expiryDate||null,
+            deliveredTotal:parseFloat(l.deliveredTotal)||null,
           }))
         })
       });
@@ -930,16 +934,9 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
             <div>
               <div style={{background:"#f9fafb",borderRadius:10,padding:16,marginBottom:16}}>
                 <div style={{fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:12,textTransform:"uppercase" as const,letterSpacing:"0.05em"}}>Receipt Details</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                   <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Received By *</label><input style={s.input} value={receivedBy} onChange={e=>setReceivedBy(e.target.value)} placeholder="Your name"/></div>
-                  <div style={s.fgroup}><label style={s.label}>Receipt Date</label><input type="date" style={s.input} value={receiptDate} onChange={e=>setReceiptDate(e.target.value)}/></div>
-                  <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Receive Into *</label>
-                    <select style={s.input} value={departmentId} onChange={e=>setDepartmentId(e.target.value)}>
-                      <option value="">— Select department —</option>
-                      {departments.map((d:any)=><option key={d.id} value={d.id}>{d.name}</option>)}
-                    </select>
-                  </div>
-                  <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Supplier</label>
+                  <div style={s.fgroup}><label style={s.label}>Supplier</label>
                     <select style={s.input} value={supplierId} onChange={e=>{const sp=tibbnaSuppliers.find((s:any)=>s.id===e.target.value);setSupplierId(e.target.value);setSupplierName(sp?.name||"");}}>
                       <option value="">— Select supplier (optional) —</option>
                       {tibbnaSuppliers.map((sp:any)=><option key={sp.id} value={sp.id}>{sp.name}{sp.city?` · ${sp.city}`:""}</option>)}
@@ -980,17 +977,16 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
               {lines.length>0&&(
                 <div style={{border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden",marginBottom:8}}>
                   <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Item","UOM","Qty Received","Unit Cost","Batch #","Expiry",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["Item","UOM","Qty Received","Delivered Total",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
                     <tbody>
                       {lines.map((l,i)=>(
                         <tr key={i}>
                           <td style={{...s.td,fontWeight:600}}>{l.itemName}</td>
                           <td style={{...s.td,color:"#6b7280"}}>{l.uom}</td>
-                          <td style={s.td}><input type="number" min={1} value={l.receivedQty} onChange={e=>updateLine(i,"receivedQty",e.target.value)} style={{...s.input,width:80,textAlign:"center" as const,padding:"5px 6px"}}/></td>
-                          <td style={s.td}><input type="number" step="0.01" value={l.unitCost} onChange={e=>updateLine(i,"unitCost",e.target.value)} style={{...s.input,width:90,padding:"5px 6px"}} placeholder="0.00"/></td>
-                          <td style={s.td}><input value={l.batchNumber} onChange={e=>updateLine(i,"batchNumber",e.target.value)} style={{...s.input,width:100,padding:"5px 6px"}} placeholder="BAT-..."/></td>
-                          <td style={s.td}><input type="date" value={l.expiryDate} onChange={e=>updateLine(i,"expiryDate",e.target.value)} style={{...s.input,width:130,padding:"5px 6px"}}/></td>
+                          <td style={s.td}><input type="number" min={1} value={l.receivedQty??0} onChange={e=>updateLine(i,"receivedQty",e.target.value)} style={{...s.input,width:80,textAlign:"center" as const,padding:"5px 6px"}}/></td>
+                          <td style={s.td}><input type="number" step="0.01" value={l.deliveredTotal??""} onChange={e=>updateLine(i,"deliveredTotal",e.target.value)} style={{...s.input,width:110,padding:"5px 6px"}} placeholder="Total from DN"/></td>
                           <td style={s.td}><button onClick={()=>removeLine(i)} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 7px",cursor:"pointer"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button></td>
+
                         </tr>
                       ))}
                     </tbody>
@@ -1000,8 +996,8 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
               {lines.length===0&&<div style={{padding:"20px",textAlign:"center",color:"#9ca3af",background:"#f9fafb",borderRadius:8}}>Search above to add items</div>}
 
               <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
-                <button onClick={handleConfirm} disabled={saving||!receivedBy.trim()||!departmentId||!lines.length}
-                  style={{...s.btn("green"),minWidth:160,opacity:saving||!receivedBy.trim()||!departmentId||!lines.length?0.5:1}}>
+                <button onClick={handleConfirm} disabled={saving||!receivedBy.trim()||!lines.length}
+                  style={{...s.btn("green"),minWidth:160,opacity:saving||!receivedBy.trim()||!lines.length?0.5:1}}>
                   {saving?"Processing...":"✓ Confirm Receipt"}
                 </button>
               </div>
@@ -1029,10 +1025,8 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
                   ))}
                 </div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
                 <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Received By *</label><input style={s.input} value={receivedBy} onChange={e=>setReceivedBy(e.target.value)} placeholder="Your name"/></div>
-                <div style={s.fgroup}><label style={s.label}>Receipt Date</label><input type="date" style={s.input} value={receiptDate} onChange={e=>setReceiptDate(e.target.value)}/></div>
-
                 <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Notes</label><input style={s.input} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Notes..."/></div>
               </div>
               <div style={{display:"flex",gap:12,marginBottom:10,fontSize:11}}>
@@ -1042,7 +1036,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
               </div>
               <div style={{border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden",marginBottom:8}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr style={{background:"#f9fafb"}}>{["Item","UOM","Ordered","Received","Diff","Unit Cost","Batch #","Lot #","Expiry"].map(h=><th key={h} style={{...s.th,fontSize:10}}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{background:"#f9fafb"}}>{["Item","UOM","Ordered","Received","Diff","Delivered Total"].map(h=><th key={h} style={{...s.th,fontSize:10}}>{h}</th>)}</tr></thead>
                   <tbody>
                     {lines.map((l,i)=>{
                       const diff=l.receivedQty-l.orderedQty;
@@ -1051,16 +1045,18 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
                           <td style={{...s.td,fontWeight:600,minWidth:140}}>{l.itemName}</td>
                           <td style={{...s.td,color:"#6b7280",fontSize:12}}>{l.uom}</td>
                           <td style={{...s.td,fontWeight:700,textAlign:"center" as const}}>{l.orderedQty}</td>
-                          <td style={s.td}><input type="number" min={0} value={l.receivedQty} onChange={e=>updateLine(i,"receivedQty",e.target.value)} style={{...s.input,width:75,textAlign:"center" as const,padding:"5px 6px",borderColor:diff<0?"#f97316":diff>0?"#22c55e":"#d1d5db",borderWidth:diff!==0?"2px":"1px"}}/></td>
+                          <td style={s.td}><input type="number" min={0} value={l.receivedQty??0} onChange={e=>updateLine(i,"receivedQty",e.target.value)} style={{...s.input,width:75,textAlign:"center" as const,padding:"5px 6px",borderColor:diff<0?"#f97316":diff>0?"#22c55e":"#d1d5db",borderWidth:diff!==0?"2px":"1px"}}/></td>
                           <td style={{...s.td,textAlign:"center" as const}}>
                             {diff===0&&<span style={{fontSize:11,color:"#6b7280"}}>—</span>}
                             {diff<0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:10,background:"#fed7aa",color:"#9a3412"}}>{diff}</span>}
                             {diff>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:10,background:"#bbf7d0",color:"#166534"}}>+{diff}</span>}
                           </td>
-                          <td style={s.td}><input type="number" step="0.01" value={l.unitCost} onChange={e=>updateLine(i,"unitCost",e.target.value)} style={{...s.input,width:80,padding:"5px 6px"}} placeholder="0.00"/></td>
-                          <td style={s.td}><input value={l.batchNumber} onChange={e=>updateLine(i,"batchNumber",e.target.value)} style={{...s.input,width:90,padding:"5px 6px"}} placeholder="BAT-..."/></td>
-                          <td style={s.td}><input value={l.lotNumber} onChange={e=>updateLine(i,"lotNumber",e.target.value)} style={{...s.input,width:80,padding:"5px 6px"}} placeholder="LOT-..."/></td>
-                          <td style={s.td}><input type="date" value={l.expiryDate} onChange={e=>updateLine(i,"expiryDate",e.target.value)} style={{...s.input,width:130,padding:"5px 6px"}}/></td>
+                          <td style={s.td}>
+                            {purchaseNote
+                              ?<span style={{fontWeight:700,color:"#374151"}}>{l.deliveredTotal?parseFloat(l.deliveredTotal).toLocaleString():"—"}</span>
+                              :<input type="number" step="0.01" value={l.deliveredTotal??""} onChange={e=>updateLine(i,"deliveredTotal",e.target.value)} style={{...s.input,width:110,padding:"5px 6px"}} placeholder="Total from DN"/>
+                            }
+                          </td>
                         </tr>
                       );
                     })}
@@ -1082,8 +1078,8 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
             <span style={{fontSize:12,color:"#9ca3af"}}>{lines.length} items · Received by: {receivedBy||"—"}</span>
             <div style={{display:"flex",gap:10}}>
               <button onClick={onClose} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
-              <button onClick={handleConfirm} disabled={saving||!receivedBy.trim()||!departmentId}
-                style={{...s.btn("green"),minWidth:160,opacity:saving||!receivedBy.trim()||!departmentId?0.5:1}}>
+              <button onClick={handleConfirm} disabled={saving||!receivedBy.trim()}
+                style={{...s.btn("green"),minWidth:160,opacity:saving||!receivedBy.trim()?0.5:1}}>
                 {saving?"Processing...":"✓ Confirm Receipt"}
               </button>
             </div>
@@ -1104,10 +1100,7 @@ function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
   const [orderItems,setOrderItems]=useState<any[]>([]);
   const [loadingOrder,setLoadingOrder]=useState(false);
   const [deliveredQtys,setDeliveredQtys]=useState<Record<string,number>>({});
-  const [batchNums,setBatchNums]=useState<Record<string,string>>({});
-  const [lotNums,setLotNums]=useState<Record<string,string>>({});
-  const [expiryDates,setExpiryDates]=useState<Record<string,string>>({});
-  const [unitCosts,setUnitCosts]=useState<Record<string,string>>({});
+  const [deliveredTotals,setDeliveredTotals]=useState<Record<string,string>>({});
   const [createdBy,setCreatedBy]=useState("");
   const [supplierRef,setSupplierRef]=useState("");
   const [deliveryDate,setDeliveryDate]=useState(new Date().toISOString().slice(0,10));
@@ -1124,9 +1117,8 @@ function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
       setOrderItems(items);
       // Pre-fill delivered qty = ordered qty (assume full delivery as default)
       const qtys:Record<string,number>={};
-      const costs:Record<string,string>={};
-      items.forEach((i:any)=>{qtys[i.id]=parseInt(i.ordered_qty)||0;costs[i.id]=String(i.unit_cost||"");});
-      setDeliveredQtys(qtys);setUnitCosts(costs);
+      items.forEach((i:any)=>{qtys[i.id]=parseInt(i.ordered_qty)||0;});
+      setDeliveredQtys(qtys);setDeliveredTotals({});
     }catch{setErr("Failed to load order items");}
     finally{setLoadingOrder(false);}
   };
@@ -1146,10 +1138,7 @@ function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
             itemId:i.item_id||null,itemName:i.item_name,uom:i.uom,
             orderedQty:parseInt(i.ordered_qty)||0,
             deliveredQty:deliveredQtys[i.id]||0,
-            unitCost:parseFloat(unitCosts[i.id])||null,
-            batchNumber:batchNums[i.id]||null,
-            lotNumber:lotNums[i.id]||null,
-            expiryDate:expiryDates[i.id]||null,
+            deliveredTotal:parseFloat(deliveredTotals[i.id])||null,
           }))
         })
       });
@@ -1164,7 +1153,7 @@ function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
 
   return(
     <div style={s.overlay}>
-      <div style={{...s.modal,width:900,maxHeight:"95vh",padding:0,display:"flex",flexDirection:"column" as const}}>
+      <div style={{...s.modal,width:680,maxHeight:"95vh",padding:0,display:"flex",flexDirection:"column" as const}}>
         <div style={{padding:"18px 24px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
           <div>
             <div style={{fontSize:16,fontWeight:700}}>📄 New Purchase Note</div>
@@ -1228,7 +1217,7 @@ function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
                     <table style={{width:"100%",borderCollapse:"collapse"}}>
                       <thead>
                         <tr style={{background:"#f9fafb"}}>
-                          {["Item","UOM","Ordered Qty","Delivered Qty","Unit Cost","Batch #","Lot #","Expiry Date"].map(h=><th key={h} style={{...s.th,fontSize:10}}>{h}</th>)}
+                          {["Item","UOM","Ordered Qty","Delivered Qty","Delivered Total (DN)"].map(h=><th key={h} style={{...s.th,fontSize:10}}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -1252,10 +1241,7 @@ function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
                                   {diff!==0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:10,background:diff<0?"#fed7aa":"#bbf7d0",color:diff<0?"#9a3412":"#166534"}}>{diff>0?"+":""}{diff}</span>}
                                 </div>
                               </td>
-                              <td style={s.td}><input type="number" step="0.01" value={unitCosts[item.id]||""} onChange={e=>setUnitCosts(p=>({...p,[item.id]:e.target.value}))} style={{...s.input,width:90,padding:"5px 6px"}} placeholder="0.00"/></td>
-                              <td style={s.td}><input value={batchNums[item.id]||""} onChange={e=>setBatchNums(p=>({...p,[item.id]:e.target.value}))} style={{...s.input,width:100,padding:"5px 6px"}} placeholder="BAT-..."/></td>
-                              <td style={s.td}><input value={lotNums[item.id]||""} onChange={e=>setLotNums(p=>({...p,[item.id]:e.target.value}))} style={{...s.input,width:90,padding:"5px 6px"}} placeholder="LOT-..."/></td>
-                              <td style={s.td}><input type="date" value={expiryDates[item.id]||""} onChange={e=>setExpiryDates(p=>({...p,[item.id]:e.target.value}))} style={{...s.input,width:130,padding:"5px 6px"}}/></td>
+                              <td style={s.td}><input type="number" step="0.01" value={deliveredTotals[item.id]||""} onChange={e=>setDeliveredTotals(p=>({...p,[item.id]:e.target.value}))} style={{...s.input,width:120,padding:"5px 6px"}} placeholder="Total from DN"/></td>
                             </tr>
                           );
                         })}
@@ -1457,7 +1443,7 @@ function FulfillRequestsSection({departments,onRefresh}:{departments:any[];onRef
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function HospitalPage(){
-  type Tab="items"|"stock"|"history"|"manufacturers"|"storage"|"departments"|"transfers"|"uom"|"orders"|"pn"|"gr"|"reports";
+  type Tab="items"|"stock"|"history"|"manufacturers"|"storage"|"departments"|"transfers"|"uom"|"orders"|"pn"|"gr"|"reports"|"wastage";
   const [tab,setTab]=useState<Tab>("items");
   const [items,setItems]=useState<any[]>([]);
   const [stock,setStock]=useState<any[]>([]);
@@ -1568,6 +1554,14 @@ export default function HospitalPage(){
   useEffect(()=>{if(tab==="orders")fetchHospitalOrders();},[tab,orderStatusFilter,fetchHospitalOrders]);
   useEffect(()=>{if(tab==="gr")fetchGoodsReceipts();},[tab,grStatusFilter,fetchGoodsReceipts]);
   useEffect(()=>{if(tab==="gr")fetchPurchaseNotes();},[tab,pnStatusFilter,fetchPurchaseNotes]);
+  // Wastage
+  const [wastageRecords,setWastageRecords]=useState<any[]>([]);
+  const [wastageLoading,setWastageLoading]=useState(false);
+  const [showWastageModal,setShowWastageModal]=useState(false);
+  const [wastageForm,setWastageForm]=useState({itemId:"",itemName:"",departmentId:"",quantity:"",type:"WASTAGE",reason:"",batchNumber:"",recordedBy:"",notes:""});
+  const [wastageSearch,setWastageSearch]=useState("");
+  const fetchWastage=useCallback(async()=>{setWastageLoading(true);try{const r=await fetch("/api/hospital/wastage");const d=await r.json();setWastageRecords(Array.isArray(d)?d:[]);}catch(e){console.error(e);}finally{setWastageLoading(false);}},[]);
+  useEffect(()=>{if(tab==="wastage")fetchWastage();},[tab,fetchWastage]);
 
 
 
@@ -1584,7 +1578,7 @@ export default function HospitalPage(){
     transfers:`🔄 Transfers${transfers.filter(t=>t.status==="PENDING").length>0?` (${transfers.filter(t=>t.status==="PENDING").length})`:""}`,
     uom:"UOM",
     orders:`📋 Create Order${orderCart.length>0?" ("+orderCart.length+")":""}`,
-    pn:"📄 Purchase Notes",gr:"📥 Goods Receipt",reports:"📊 Reports",
+    pn:"📄 Purchase Notes",gr:"📥 Goods Receipt",reports:"📊 Reports",wastage:"🗑️ Wastage",
   };
 
   return(
@@ -2432,7 +2426,114 @@ export default function HospitalPage(){
             </div>
           </div>
         )}
+        {tab==="wastage"&&(
+          <div style={{display:"flex",flexDirection:"column" as const,gap:16}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap" as const,gap:8}}>
+              <div style={{display:"flex",gap:8,flex:1,flexWrap:"wrap" as const}}>
+                <input style={{...s.input,maxWidth:260}} placeholder="Search item name..." value={wastageSearch} onChange={e=>setWastageSearch(e.target.value)}/>
+              </div>
+              <button style={s.btn("purple")} onClick={()=>{setWastageForm({itemId:"",itemName:"",departmentId:"",quantity:"",type:"WASTAGE",reason:"",batchNumber:"",recordedBy:"",notes:""});setShowWastageModal(true);}}>+ Record Wastage / Return</button>
+            </div>
+            <div style={s.card}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:13,fontWeight:600}}>Wastage & Returns Log</span>
+                <span style={{fontSize:12,color:"#9ca3af"}}>{wastageRecords.length} records</span>
+              </div>
+              {wastageLoading?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Loading…</div>:wastageRecords.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No records yet.</div>:(
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr>{["Item","Type","Department","Qty","Reason","Batch","Recorded By","Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {wastageRecords.filter(w=>!wastageSearch||w.item_name?.toLowerCase().includes(wastageSearch.toLowerCase())).map((w:any,i:number)=>{
+                        const typeColors:Record<string,[string,string]>={WASTAGE:["#fef2f2","#dc2626"],RETURN:["#f0fdf4","#16a34a"],DAMAGE:["#fff7ed","#ea580c"],EXPIRED:["#fdf4ff","#9333ea"]};
+                        const [bg,col]=typeColors[w.type]??["#f3f4f6","#374151"];
+                        return(
+                          <tr key={i} onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")} onMouseLeave={e=>(e.currentTarget.style.background="")}>
+                            <td style={{...s.td,fontWeight:600}}>{w.item_name??"—"}</td>
+                            <td style={s.td}><span style={s.badge(bg,col)}>{w.type}</span></td>
+                            <td style={s.td}>{w.department_name??"—"}</td>
+                            <td style={{...s.td,fontWeight:700,color:"#dc2626"}}>-{w.quantity}</td>
+                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{w.reason??"—"}</td>
+                            <td style={{...s.td,fontSize:11,fontFamily:"monospace"}}>{w.batch_number??"—"}</td>
+                            <td style={s.td}>{w.recorded_by??"—"}</td>
+                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{w.createdat?new Date(w.createdat).toLocaleDateString():"—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Wastage Modal */}
+      {showWastageModal&&(
+        <div style={s.overlay} onClick={()=>setShowWastageModal(false)}>
+          <div style={{...s.modal,width:480}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"16px 20px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:15,fontWeight:700}}>Record Wastage / Return</span>
+              <button onClick={()=>setShowWastageModal(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#6b7280"}}>✕</button>
+            </div>
+            <div style={{padding:20,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div style={{...s.fgroup,gridColumn:"1/-1"}}>
+                <label style={s.label}>Item *</label>
+                <select style={s.input} value={wastageForm.itemId} onChange={e=>{const item=items.find((i:any)=>i.id===e.target.value);setWastageForm(f=>({...f,itemId:e.target.value,itemName:item?.name||""}));}}>
+                  <option value="">Select item…</option>
+                  {items.map((i:any)=><option key={i.id} value={i.id}>{i.name}</option>)}
+                </select>
+              </div>
+              <div style={s.fgroup}>
+                <label style={s.label}>Type *</label>
+                <select style={s.input} value={wastageForm.type} onChange={e=>setWastageForm(f=>({...f,type:e.target.value}))}>
+                  <option value="WASTAGE">Wastage</option>
+                  <option value="RETURN">Return</option>
+                  <option value="DAMAGE">Damage</option>
+                  <option value="EXPIRED">Expired</option>
+                </select>
+              </div>
+              <div style={s.fgroup}>
+                <label style={s.label}>Quantity *</label>
+                <input type="number" min="1" style={s.input} value={wastageForm.quantity} onChange={e=>setWastageForm(f=>({...f,quantity:e.target.value}))} placeholder="0"/>
+              </div>
+              <div style={s.fgroup}>
+                <label style={s.label}>Department</label>
+                <select style={s.input} value={wastageForm.departmentId} onChange={e=>setWastageForm(f=>({...f,departmentId:e.target.value}))}>
+                  <option value="">Hospital Central Store</option>
+                  {departments.map((d:any)=><option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div style={s.fgroup}>
+                <label style={s.label}>Batch Number</label>
+                <input style={s.input} value={wastageForm.batchNumber} onChange={e=>setWastageForm(f=>({...f,batchNumber:e.target.value}))} placeholder="Optional"/>
+              </div>
+              <div style={s.fgroup}>
+                <label style={s.label}>Recorded By</label>
+                <input style={s.input} value={wastageForm.recordedBy} onChange={e=>setWastageForm(f=>({...f,recordedBy:e.target.value}))} placeholder="Name"/>
+              </div>
+              <div style={{...s.fgroup,gridColumn:"1/-1"}}>
+                <label style={s.label}>Reason</label>
+                <input style={s.input} value={wastageForm.reason} onChange={e=>setWastageForm(f=>({...f,reason:e.target.value}))} placeholder="e.g. Expired, Damaged in storage…"/>
+              </div>
+              <div style={{...s.fgroup,gridColumn:"1/-1"}}>
+                <label style={s.label}>Notes</label>
+                <input style={s.input} value={wastageForm.notes} onChange={e=>setWastageForm(f=>({...f,notes:e.target.value}))} placeholder="Optional"/>
+              </div>
+            </div>
+            <div style={{padding:"12px 20px",borderTop:"1px solid #e5e7eb",display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}} onClick={()=>setShowWastageModal(false)}>Cancel</button>
+              <button style={s.btn("purple")} onClick={async()=>{
+                if(!wastageForm.itemId||!wastageForm.quantity){showToast("Item and quantity required");return;}
+                const res=await fetch("/api/hospital/wastage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...wastageForm,departmentId:wastageForm.departmentId||null})});
+                if(!res.ok){const d=await res.json();showToast(d.error||"Failed");return;}
+                setShowWastageModal(false);fetchWastage();fetchStock();showToast("Recorded successfully");
+              }}>Save Record</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {viewItem&&<ViewItemModal item={viewItem} onClose={()=>setViewItem(null)} onAddToPR={()=>addToOrderCart(viewItem)}/>}

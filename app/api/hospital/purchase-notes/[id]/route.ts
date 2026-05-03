@@ -5,6 +5,7 @@ const pool = new Pool({ connectionString: process.env.TIBBNA_API_URL, ssl: { rej
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
+    await pool.query(`ALTER TABLE hospital_purchase_note_items ADD COLUMN IF NOT EXISTS delivered_total NUMERIC(12,2)`).catch(()=>{});
     const note  = await pool.query(`SELECT * FROM hospital_purchase_notes WHERE id=$1`, [id]);
     const items = await pool.query(`SELECT * FROM hospital_purchase_note_items WHERE note_id=$1 ORDER BY createdat`, [id]);
     return NextResponse.json({ note: note.rows[0], items: items.rows });
