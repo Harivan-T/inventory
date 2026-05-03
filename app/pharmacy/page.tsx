@@ -500,7 +500,7 @@ export default function PharmacyPage() {
       ]);
       const [iData,dData,cData,sData,wData] = await Promise.all([iRes.json(),dRes.json(),cRes.json(),sRes.json(),wRes.json()]);
       setItems(Array.isArray(iData)?iData:[]);
-      setDispenses(Array.isArray(dData)?dData:[]);
+      setDispenses(dData.logs??[]);
       setControlled(Array.isArray(cData)?cData:[]);
       setStores(Array.isArray(sData)?sData:[]);
       const allWh = Array.isArray(wData)?wData:(wData.warehouses??[]);

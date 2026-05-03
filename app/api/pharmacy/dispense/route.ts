@@ -14,9 +14,8 @@ import { eq, and, sql } from "drizzle-orm";
 export async function GET(req: NextRequest) {
   try {
     const storeid = req.nextUrl.searchParams.get("storeid");
-    if (!storeid) return NextResponse.json({ error: "storeid required" }, { status: 400 });
 
-    const logs = await db
+    const query = db
       .select({
         id:              controlledDrugLog.id,
         actiontype:      controlledDrugLog.actiontype,
@@ -33,9 +32,12 @@ export async function GET(req: NextRequest) {
       })
       .from(controlledDrugLog)
       .leftJoin(items, eq(items.id, controlledDrugLog.itemid))
-      .where(eq(controlledDrugLog.storeid, storeid))
       .orderBy(sql`${controlledDrugLog.createdat} DESC`)
       .limit(200);
+
+    const logs = storeid
+      ? await query.where(eq(controlledDrugLog.storeid, storeid))
+      : await query;
 
     return NextResponse.json({ logs });
   } catch (err: any) {

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     const field = type === "item_number" ? "itemcode" : "name";
     const r = await pool.query(
-      `SELECT id, name, generic_name, itemcode, itemtype, uom, manufacturer, supplier, unit_cost, selling_price, isactive
+      `SELECT id, name, generic_name, itemcode, itemtype, uom, manufacturer, supplier_name, unit_cost, selling_price, isactive
        FROM hospital_items
        WHERE workspace_id = $1
          AND ${field} ILIKE $2
