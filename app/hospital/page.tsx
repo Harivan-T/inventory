@@ -63,6 +63,18 @@ function sc(qty:number,reorder:number){
   return{bg:"#d1fae5",color:"#065f46",label:"OK"};
 }
 
+const PG=15;
+function Pagination({page,total,onPage}:{page:number;total:number;onPage:(p:number)=>void}){
+  const pages=Math.ceil(total/PG);if(pages<=1)return null;
+  return(
+    <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end",padding:"10px 16px",borderTop:"1px solid #f3f4f6",background:"#fafafa"}}>
+      <button onClick={()=>onPage(page-1)} disabled={page===1} style={{padding:"5px 12px",fontSize:12,borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",cursor:page===1?"default":"pointer",opacity:page===1?0.4:1}}>← Prev</button>
+      <span style={{fontSize:12,color:"#6b7280"}}>Page {page} of {pages} &nbsp;·&nbsp; {total} records</span>
+      <button onClick={()=>onPage(page+1)} disabled={page>=pages} style={{padding:"5px 12px",fontSize:12,borderRadius:6,border:"1px solid #e5e7eb",background:"#fff",cursor:page>=pages?"default":"pointer",opacity:page>=pages?0.4:1}}>Next →</button>
+    </div>
+  );
+}
+
 function StorageSearch({value,locations,onChange}:{value:string;locations:any[];onChange:(v:string)=>void}){
   const [q,setQ]=useState(value);const [open,setOpen]=useState(false);
   const DEFAULTS=["Shelf A-1","Shelf A-2","Shelf B-1","Fridge 1","Freezer 1","Cabinet 1","Storage Room","Controlled Cabinet"];
@@ -95,7 +107,7 @@ function ViewItemModal({item,onClose,onAddToPR}:{item:any;onClose:()=>void;onAdd
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div><div style={{fontSize:15,fontWeight:700}}>{item.name}</div><div style={{fontSize:12,color:"#6b7280"}}>{item.itemcode} · {item.itemtype}</div></div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>{onAddToPR(item);onClose();}} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.cart} size={13} color="#fff"/> Add to PR</button>
+          <button onClick={()=>{onAddToPR(item);onClose();}} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6}}><Icon d={icons.cart} size={13} color="#fff"/> Add to Cart</button>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
         </div>
       </div>
@@ -142,6 +154,7 @@ function AddItemWizard({onClose,onSuccess,departments,storageLocations,manufactu
     min_level:"5",max_level:"100",unit_cost:"",selling_price:"",notes:"",
     expiry_date:"",manufacture_date:"",
   });
+  
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState("");
   // Search existing items
@@ -388,7 +401,7 @@ function CreateOrderModal({items,suppliers,departments,initialCart,onClose,onSuc
 
   return(
     <div style={s.overlay}>
-      <div style={{...s.modal,width:840,maxHeight:"94vh",padding:0,display:"flex",flexDirection:"column" as const}}>
+      <div style={{...s.modal,width:1020,maxHeight:"96vh",padding:0,display:"flex",flexDirection:"column" as const}}>
         <div style={{padding:"18px 24px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
           <div><div style={{fontSize:16,fontWeight:700}}>📋 Create Purchase Order</div><div style={{fontSize:12,color:"#6b7280",marginTop:2}}>{lines.length} items · Est. ${total.toFixed(2)}</div></div>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
@@ -619,7 +632,98 @@ function ReceiveOrderModal({orderDetail,departments,onClose,onSuccess}:{orderDet
 }
 
 // ── View Order Detail Modal ───────────────────────────────────────────────────
-function ViewOrderModal({detail,onClose,onReceive}:{detail:any;onClose:()=>void;onReceive:()=>void}){
+function EditOrderModal({detail,suppliers,onClose,onSuccess}:{detail:any;suppliers:any[];onClose:()=>void;onSuccess:()=>void}){
+  const order=detail?.order;
+  const [form,setForm]=useState({
+    orderedBy:order?.ordered_by||"",
+    orderDate:order?.order_date?new Date(order.order_date).toISOString().slice(0,10):"",
+    expectedDate:order?.expected_date?new Date(order.expected_date).toISOString().slice(0,10):"",
+    supplierName:order?.supplier_name||"",
+    supplierEmail:order?.supplier_email||"",
+    supplierPhone:order?.supplier_phone||"",
+    notes:order?.notes||"",
+  });
+  const [lines,setLines]=useState<{itemId:string;itemName:string;uom:string;qty:number;unitCost:string;}[]>(
+    (detail?.items||[]).map((i:any)=>({itemId:i.item_id||"",itemName:i.item_name||"",uom:i.uom||"piece",qty:parseInt(i.ordered_qty)||0,unitCost:String(i.unit_cost||"")}))
+  );
+  const [saving,setSaving]=useState(false);const [err,setErr]=useState("");
+  const setF=(k:string,v:string)=>setForm(f=>({...f,[k]:v}));
+  const total=lines.reduce((s,l)=>s+(l.qty||0)*(parseFloat(l.unitCost)||0),0);
+
+  const save=async()=>{
+    if(!form.orderedBy.trim()){setErr("Ordered By is required");return;}
+    if(!lines.length){setErr("Add at least one item");return;}
+    setSaving(true);setErr("");
+    try{
+      const res=await fetch(`/api/hospital/orders/${order.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({edit:true,...form,items:lines.map(l=>({itemId:l.itemId,itemName:l.itemName,uom:l.uom,orderedQty:l.qty,unitCost:parseFloat(l.unitCost)||null}))})
+      });
+      const data=await res.json();
+      if(!res.ok){setErr(data.error||"Failed");return;}
+      onSuccess();
+    }catch(e:any){setErr(e?.message||"Network error");}
+    finally{setSaving(false);}
+  };
+
+  return(
+    <div style={s.overlay}>
+      <div style={{...s.modal,width:1020,maxHeight:"96vh",padding:0,display:"flex",flexDirection:"column" as const}}>
+        <div style={{padding:"18px 24px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div><div style={{fontSize:16,fontWeight:700}}>✏️ Edit Order — {order?.order_number}</div><div style={{fontSize:12,color:"#6b7280",marginTop:2}}>{lines.length} items · Est. ${total.toFixed(2)}</div></div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
+        </div>
+        <div style={{padding:"20px 24px",overflowY:"auto" as const,flex:1}}>
+          {err&&<div style={{background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:16}}>{err}</div>}
+          <div style={{background:"#f9fafb",borderRadius:10,padding:16,marginBottom:20}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:12,textTransform:"uppercase" as const,letterSpacing:"0.05em"}}>Order Details</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+              <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Ordered By *</label><input style={s.input} value={form.orderedBy} onChange={e=>setF("orderedBy",e.target.value)}/></div>
+              <div style={s.fgroup}><label style={s.label}>Order Date</label><input type="date" style={s.input} value={form.orderDate} onChange={e=>setF("orderDate",e.target.value)}/></div>
+              <div style={s.fgroup}><label style={s.label}>Expected Delivery Date</label><input type="date" style={s.input} value={form.expectedDate} onChange={e=>setF("expectedDate",e.target.value)}/></div>
+              <div style={s.fgroup}><label style={s.label}>Supplier</label>
+                <select style={s.input} value={form.supplierName} onChange={e=>{const sp=suppliers.find((x:any)=>x.name===e.target.value);setF("supplierName",e.target.value);if(sp){setF("supplierEmail",sp.email||"");setF("supplierPhone",sp.phone||"");}}}>
+                  <option value="">— Select supplier —</option>
+                  {suppliers.map((sp:any)=><option key={sp.id} value={sp.name}>{sp.name}</option>)}
+                </select>
+              </div>
+              <div style={s.fgroup}><label style={s.label}>Supplier Email</label><input style={s.input} value={form.supplierEmail} onChange={e=>setF("supplierEmail",e.target.value)}/></div>
+              <div style={s.fgroup}><label style={s.label}>Supplier Phone</label><input style={s.input} value={form.supplierPhone} onChange={e=>setF("supplierPhone",e.target.value)}/></div>
+              <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Notes</label><input style={s.input} value={form.notes} onChange={e=>setF("notes",e.target.value)}/></div>
+            </div>
+          </div>
+          <div style={{fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:8,textTransform:"uppercase" as const,letterSpacing:"0.05em"}}>Items</div>
+          <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#92400e",marginBottom:12}}>
+            ℹ️ Updating unit costs here will also update prices in the inventory items table.
+          </div>
+          {lines.length>0&&(
+            <div style={{border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden",marginBottom:16}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>{["Item","UOM","Qty","Unit Cost","Total",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>{lines.map((l,i)=>(
+                  <tr key={l.itemId||i}>
+                    <td style={{...s.td,fontWeight:600}}>{l.itemName}</td>
+                    <td style={s.td}>{l.uom}</td>
+                    <td style={s.td}><input type="text" inputMode="numeric" pattern="[0-9]*" value={l.qty} onChange={e=>setLines(p=>p.map((x,j)=>j===i?{...x,qty:parseInt(e.target.value.replace(/[^0-9]/g,""))||0}:x))} style={{...s.input,width:70,textAlign:"center" as const}}/></td>
+                    <td style={s.td}><input type="number" step="0.01" min="0" value={l.unitCost} onChange={e=>setLines(p=>p.map((x,j)=>j===i?{...x,unitCost:e.target.value}:x))} style={{...s.input,width:100}}/></td>
+                    <td style={{...s.td,color:"#6366f1",fontWeight:600}}>${((l.qty||0)*(parseFloat(l.unitCost)||0)).toFixed(2)}</td>
+                    <td style={s.td}><button onClick={()=>setLines(p=>p.filter((_,j)=>j!==i))} style={{background:"#fee2e2",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#dc2626"}}>✕</button></td>
+                  </tr>
+                ))}</tbody>
+                <tfoot><tr style={{background:"#f9fafb"}}><td colSpan={4} style={{...s.td,fontWeight:700,textAlign:"right" as const}}>Total:</td><td style={{...s.td,fontWeight:700,color:"#6366f1",fontSize:14}}>${total.toFixed(2)}</td><td/></tr></tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+        <div style={{padding:"14px 24px",borderTop:"1px solid #e5e7eb",display:"flex",gap:8,justifyContent:"flex-end",flexShrink:0}}>
+          <button onClick={onClose} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
+          <button disabled={saving} onClick={save} style={s.btn("purple")}>{saving?"Saving...":"✏️ Save Changes"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ViewOrderModal({detail,onClose,onReceive,onEdit}:{detail:any;onClose:()=>void;onReceive:()=>void;onEdit:()=>void}){
   const order=detail?.order;const items=detail?.items||[];
   if(!order)return null;
   const total=items.reduce((s:number,i:any)=>s+(parseInt(i.ordered_qty||0)*parseFloat(i.unit_cost||0)),0);
@@ -645,6 +749,7 @@ function ViewOrderModal({detail,onClose,onReceive}:{detail:any;onClose:()=>void;
       </table>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Close</button>
+        <button onClick={()=>{onClose();onEdit();}} style={{...s.btn("ghost"),border:"1px solid #6366f1",color:"#6366f1",display:"flex",alignItems:"center",gap:5}}><Icon d={icons.edit} size={12} color="#6366f1"/> Edit</button>
         {(order.status==="PENDING"||order.status==="PARTIALLY_DELIVERED")&&<button onClick={()=>{onClose();onReceive();}} style={s.btn("green")}>📥 Receive This Order</button>}
       </div>
     </div></div>
@@ -687,12 +792,202 @@ function ViewGRModal({detail,suppliers,onClose}:{detail:any;suppliers:any[];onCl
 }
 
 
+// ── Correction Modal ─────────────────────────────────────────────────────────
+function CorrectionModal({onClose,onSuccess}:{onClose:()=>void;onSuccess:(msg:string)=>void}){
+  const [phase,setPhase]=useState<"search"|"form">("search");
+  const [q,setQ]=useState("");
+  const [dateFrom,setDateFrom]=useState("");
+  const [dateTo,setDateTo]=useState("");
+  const [results,setResults]=useState<any[]>([]);
+  const [searching,setSearching]=useState(false);
+  const [selected,setSelected]=useState<any>(null);
+  const [origItems,setOrigItems]=useState<any[]>([]);
+  const [corrItems,setCorrItems]=useState<any[]>([]);
+  const [correctedBy,setCorrectedBy]=useState("");
+  const [reason,setReason]=useState("");
+  const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState("");
+
+  const doSearch=async(overrideQ?:string,overrideDateFrom?:string,overrideDateTo?:string)=>{
+    setSearching(true);setErr("");
+    try{
+      const p=new URLSearchParams({q:overrideQ??q,dateFrom:overrideDateFrom??dateFrom,dateTo:overrideDateTo??dateTo});
+      const r=await fetch(`/api/hospital/goods-receipt/correction?${p}`);
+      const d=await r.json();
+      if(d.error){setErr(d.error);}else{setResults(d);}
+    }catch(e:any){setErr(e.message);}
+    setSearching(false);
+  };
+
+  useEffect(()=>{doSearch("","","");},[]);
+
+  const selectReceipt=async(gr:any)=>{
+    const r=await fetch(`/api/hospital/goods-receipt/${gr.id}`);
+    const d=await r.json();
+    const items=d.items||[];
+    setSelected(gr);
+    setOrigItems(items);
+    setCorrItems(items.map((i:any)=>({...i,correctedQty:String(i.received_qty??0),itemNote:""})));
+    setPhase("form");
+  };
+
+  const doSave=async()=>{
+    setErr("");
+    if(!correctedBy.trim()){setErr("Corrected by is required");return;}
+    if(!reason.trim()){setErr("Reason is required");return;}
+    setSaving(true);
+    try{
+      const r=await fetch("/api/hospital/goods-receipt/correction",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          originalReceiptId:selected.id,
+          correctedBy,reason,
+          items:corrItems.map((i:any)=>({
+            itemId:i.item_id,
+            itemName:i.item_name,
+            uom:i.uom,
+            originalQty:i.received_qty??0,
+            correctedQty:parseInt(i.correctedQty)||0,
+            itemNote:i.itemNote||null,
+          }))
+        })
+      });
+      const d=await r.json();
+      if(d.error){setErr(d.error);setSaving(false);return;}
+      onSuccess(`Correction recorded. Reversal: ${d.reversalNumber} · Corrected: ${d.correctionNumber}`);
+    }catch(e:any){setErr(e.message);setSaving(false);}
+  };
+
+  const stColors:Record<string,{bg:string,color:string}>={COMPLETE:{bg:"#d1fae5",color:"#065f46"},PARTIAL:{bg:"#fef3c7",color:"#92400e"}};
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:60}}>
+      <div style={{background:"#fff",borderRadius:14,padding:0,width:860,maxHeight:"92vh",overflowY:"auto",display:"flex",flexDirection:"column"}}>
+        {/* Header */}
+        <div style={{padding:"18px 24px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",borderRadius:"14px 14px 0 0"}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:16,color:"#111827"}}>🔧 Received Order Correction</div>
+            <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>Append-only — no existing records are changed. Creates a reversal and a corrected receipt.</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",padding:4}}><svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div style={{padding:24,flex:1}}>
+          {phase==="search"&&(<>
+            {/* Search bar + date range */}
+            <div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:16,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:200}}>
+                <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Search</label>
+                <input style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13,boxSizing:"border-box" as const}} value={q} onChange={e=>setQ(e.target.value)} placeholder="Receipt #, order #, supplier, item name..." onKeyDown={e=>e.key==="Enter"&&doSearch()}/>
+              </div>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>From Date</label>
+                <input type="date" style={{padding:"8px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13}} value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
+              </div>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>To Date</label>
+                <input type="date" style={{padding:"8px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13}} value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
+              </div>
+              <button onClick={()=>doSearch()} disabled={searching} style={{padding:"8px 18px",borderRadius:8,background:"#6366f1",color:"#fff",border:"none",fontWeight:600,fontSize:13,cursor:"pointer"}}>{searching?"Searching…":"Search"}</button>
+            </div>
+            {err&&<div style={{padding:"10px 14px",background:"#fee2e2",color:"#991b1b",borderRadius:8,fontSize:13,marginBottom:12}}>{err}</div>}
+            {searching&&<div style={{textAlign:"center",padding:32,color:"#9ca3af",fontSize:13}}>Searching…</div>}
+            {!searching&&results.length===0&&<div style={{textAlign:"center",padding:32,color:"#9ca3af",fontSize:13}}>No COMPLETE or PARTIAL receipts found{q?` matching "${q}"`:""}.</div>}
+            {results.length>0&&(
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>{["Receipt #","Order #","Supplier","Received By","Date","Items","Status",""].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",background:"#f9fafb",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {results.map((gr:any)=>{
+                    const sc=stColors[gr.status]??{bg:"#f3f4f6",color:"#374151"};
+                    return(<tr key={gr.id} style={{cursor:"pointer"}} onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")} onMouseLeave={e=>(e.currentTarget.style.background="")}>
+                      <td style={{padding:"10px 12px",fontSize:12,fontFamily:"monospace",color:"#6366f1",fontWeight:600}}>{gr.receipt_number}</td>
+                      <td style={{padding:"10px 12px",fontSize:12,fontFamily:"monospace",color:"#9ca3af"}}>{gr.order_number??"—"}</td>
+                      <td style={{padding:"10px 12px",fontSize:13,fontWeight:600}}>{gr.supplier_name??"—"}</td>
+                      <td style={{padding:"10px 12px",fontSize:13}}>{gr.received_by}</td>
+                      <td style={{padding:"10px 12px",fontSize:12,color:"#6b7280"}}>{gr.receipt_date?new Date(gr.receipt_date).toLocaleDateString():"—"}</td>
+                      <td style={{padding:"10px 12px",fontSize:13,fontWeight:600}}>{gr.item_count??0} items</td>
+                      <td style={{padding:"10px 12px"}}><span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{gr.status}</span></td>
+                      <td style={{padding:"10px 12px"}}><button onClick={()=>selectReceipt(gr)} style={{padding:"5px 14px",borderRadius:7,background:"#6366f1",color:"#fff",border:"none",fontWeight:600,fontSize:12,cursor:"pointer"}}>Select</button></td>
+                    </tr>);
+                  })}
+                </tbody>
+              </table>
+            )}
+          </>)}
+
+          {phase==="form"&&selected&&(<>
+            {/* Back link + receipt info */}
+            <button onClick={()=>setPhase("search")} style={{background:"none",border:"none",cursor:"pointer",color:"#6366f1",fontWeight:600,fontSize:13,padding:0,marginBottom:14}}>← Back to search</button>
+            <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+              <div style={{fontWeight:700,fontSize:13,color:"#1d4ed8",marginBottom:4}}>Correcting: {selected.receipt_number}</div>
+              <div style={{fontSize:12,color:"#3b82f6"}}>Order: {selected.order_number??"—"} · Supplier: {selected.supplier_name??"—"} · Received by: {selected.received_by} · Date: {selected.receipt_date?new Date(selected.receipt_date).toLocaleDateString():"—"}</div>
+            </div>
+
+            {/* Info banner */}
+            <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#92400e"}}>
+              ⚠️ Enter the <strong>correct</strong> quantities below. A reversal and a new corrected receipt will be created automatically. Stock will be adjusted by the net difference only.
+            </div>
+
+            {/* Items table */}
+            <div style={{overflowX:"auto",marginBottom:16}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>{["Item","Unit","Original Qty","Corrected Qty","Note"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",background:"#f9fafb",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {corrItems.map((item:any,idx:number)=>{
+                    const orig=parseInt(item.received_qty)||0;
+                    const corr=parseInt(item.correctedQty)||0;
+                    const diff=corr-orig;
+                    return(<tr key={idx}>
+                      <td style={{padding:"10px 12px",fontWeight:600,fontSize:13}}>{item.item_name}</td>
+                      <td style={{padding:"10px 12px",fontSize:13,color:"#6b7280"}}>{item.uom??"—"}</td>
+                      <td style={{padding:"10px 12px",fontSize:13,fontWeight:600,color:"#374151"}}>{orig}</td>
+                      <td style={{padding:"10px 12px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <input type="text" inputMode="numeric" value={item.correctedQty} onChange={e=>setCorrItems(prev=>prev.map((c,i)=>i===idx?{...c,correctedQty:e.target.value.replace(/[^0-9]/g,"")}:c))} style={{width:80,padding:"6px 8px",borderRadius:7,border:"1px solid #d1d5db",fontSize:13,textAlign:"center"}}/>
+                          {diff!==0&&<span style={{fontSize:11,fontWeight:700,color:diff>0?"#16a34a":"#dc2626",whiteSpace:"nowrap"}}>{diff>0?"+":""}{diff}</span>}
+                        </div>
+                      </td>
+                      <td style={{padding:"10px 12px"}}><input value={item.itemNote} onChange={e=>setCorrItems(prev=>prev.map((c,i)=>i===idx?{...c,itemNote:e.target.value}:c))} placeholder="Optional note" style={{width:"100%",padding:"6px 8px",borderRadius:7,border:"1px solid #d1d5db",fontSize:13,boxSizing:"border-box" as const}}/></td>
+                    </tr>);
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Meta fields */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Corrected By <span style={{color:"#dc2626"}}>*</span></label>
+                <input style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13,boxSizing:"border-box" as const}} value={correctedBy} onChange={e=>setCorrectedBy(e.target.value)} placeholder="Name of person making correction"/>
+              </div>
+              <div>
+                <label style={{fontSize:12,fontWeight:600,color:"#374151",display:"block",marginBottom:4}}>Reason for Correction <span style={{color:"#dc2626"}}>*</span></label>
+                <input style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #d1d5db",fontSize:13,boxSizing:"border-box" as const}} value={reason} onChange={e=>setReason(e.target.value)} placeholder="e.g. Wrong quantity recorded, damaged items not noted"/>
+              </div>
+            </div>
+
+            {err&&<div style={{padding:"10px 14px",background:"#fee2e2",color:"#991b1b",borderRadius:8,fontSize:13,marginBottom:12}}>{err}</div>}
+
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={onClose} style={{padding:"9px 20px",borderRadius:8,border:"1px solid #e5e7eb",background:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",color:"#374151"}}>Cancel</button>
+              <button onClick={doSave} disabled={saving} style={{padding:"9px 20px",borderRadius:8,background:"#6366f1",color:"#fff",border:"none",fontWeight:700,fontSize:13,cursor:saving?"default":"pointer",opacity:saving?0.7:1}}>
+                {saving?"Saving…":"✓ Submit Correction"}
+              </button>
+            </div>
+          </>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── New Goods Receipt Modal ───────────────────────────────────────────────────
-function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,onClose,onSuccess}:{
-  orders:any[];departments:any[];tibbnaSuppliers:any[];purchaseNote?:any;
+function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,onClose,onSuccess}:{
+  orders:any[];departments:any[];tibbnaSuppliers:any[];
   onClose:()=>void;onSuccess:(msg:string)=>void;
 }){
-  type GRLine={itemId:string;itemName:string;uom:string;orderedQty:number;receivedQty:number;deliveredTotal:string;};
+  type GRLine={itemId:string;itemName:string;uom:string;orderedQty:number;receivedQty:number;returnClaim:string;claimNote:string;dnRegNum:string;};
   type Mode="order"|"standalone";
   const [mode,setMode]=useState<Mode>("order");
   const [step,setStep]=useState<"select"|"review">("select");
@@ -715,27 +1010,9 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
   // Standalone item search
   const [itemQ,setItemQ]=useState("");
   const [itemResults,setItemResults]=useState<any[]>([]);
+  const [grOrderSearch,setGrOrderSearch]=useState("");
 
   const pendingOrders=orders.filter(o=>o.status==="PENDING"||o.status==="PARTIALLY_DELIVERED");
-
-  // Pre-load from purchase note if provided
-  useEffect(()=>{
-    if(!purchaseNote?.note)return;
-    const pn=purchaseNote.note;
-    const pnItems=purchaseNote.items||[];
-    setMode("order");
-    setSelectedOrderId(pn.order_id||"");
-    setSupplierName(pn.supplier_name||"");
-    setLines(pnItems.map((i:any)=>({
-      itemId:i.item_id||"",itemName:i.item_name||"",uom:i.uom||"piece",
-      orderedQty:parseInt(i.ordered_qty)||0,
-      receivedQty:parseInt(i.delivered_qty)||0,
-      deliveredTotal:i.delivered_total!=null?String(i.delivered_total):"",
-    })));
-    // find and set order detail
-    const matchOrder=orders.find(o=>o.id===pn.order_id);
-    if(matchOrder){setOrderDetail({order:matchOrder,items:[]});setStep("review");}
-  },[purchaseNote]);
 
   useEffect(()=>{
     if(itemQ.length<2){setItemResults([]);return;}
@@ -748,7 +1025,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
 
   const addStandaloneLine=(item:any)=>{
     if(lines.find(l=>l.itemId===item.id))return;
-    setLines(prev=>[...prev,{itemId:item.id,itemName:item.name,uom:item.uom||"piece",orderedQty:0,receivedQty:1,deliveredTotal:""}]);
+    setLines(prev=>[...prev,{itemId:item.id,itemName:item.name,uom:item.uom||"piece",orderedQty:0,receivedQty:1,returnClaim:"",claimNote:"",dnRegNum:""}]);
     setItemQ("");setItemResults([]);
   };
   const removeLine=(idx:number)=>setLines(prev=>prev.filter((_,i)=>i!==idx));
@@ -757,20 +1034,13 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
   const loadOrder=async(orderId:string)=>{
     setLoadingOrder(true);
     try{
-      const [r,pnR]=await Promise.all([
-        fetch(`/api/hospital/orders/${orderId}`),
-        fetch(`/api/hospital/purchase-notes?order_id=${orderId}`),
-      ]);
+      const r=await fetch(`/api/hospital/orders/${orderId}`);
       const d=await r.json();
-      const pnData=pnR.ok?await pnR.json():null;
-      // Build a map of item_id → delivered_total from the linked PN (if any)
-      const dnTotals:Record<string,string>={};
-      if(pnData?.items){pnData.items.forEach((i:any)=>{if(i.item_id&&i.delivered_total!=null)dnTotals[i.item_id]=String(i.delivered_total);});}
       setOrderDetail(d);
       setLines((d.items||[]).map((i:any)=>({
         itemId:i.item_id||"",itemName:i.item_name||"",uom:i.uom||"piece",
         orderedQty:parseInt(i.ordered_qty)||0,receivedQty:parseInt(i.ordered_qty)||0,
-        deliveredTotal:dnTotals[i.item_id]||"",
+        returnClaim:"",claimNote:"",dnRegNum:"",
       })));
       setStep("review");
     }catch{setErr("Failed to load order");}
@@ -781,20 +1051,20 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
     setSaving(true);setErr("");
     try{
       const order=orderDetail?.order;
-      const purchaseNoteId=purchaseNote?.note?.id||null;
       const finalSupplierName=mode==="order"?order?.supplier_name:supplierName;
       const finalSupplierEmail=mode==="order"?order?.supplier_email:(tibbnaSuppliers.find((s:any)=>s.id===supplierId)?.email||"");
       const res=await fetch("/api/hospital/goods-receipt",{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          orderId:order?.id||null,orderNumber:order?.order_number||null,purchaseNoteId,
+          orderId:order?.id||null,orderNumber:order?.order_number||null,
           receivedBy,receiptDate,
           supplierName:finalSupplierName||null,supplierEmail:finalSupplierEmail||null,
           notes,departmentId,
           items:finalLines.map(l=>({
             itemId:l.itemId||null,itemName:l.itemName,uom:l.uom,
             orderedQty:l.orderedQty,receivedQty:l.receivedQty,
-            deliveredTotal:parseFloat(l.deliveredTotal)||null,
+            returnClaim:parseInt(l.returnClaim)||null,claimNote:l.claimNote||null,
+            dnRegNum:l.dnRegNum||null,
           }))
         })
       });
@@ -821,7 +1091,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
 
   return(
     <div style={s.overlay}>
-      <div style={{...s.modal,width:920,maxHeight:"95vh",padding:0,display:"flex",flexDirection:"column" as const}}>
+      <div style={{...s.modal,width:1040,maxHeight:"96vh",padding:0,display:"flex",flexDirection:"column" as const}}>
 
         {/* Header */}
         <div style={{padding:"18px 24px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
@@ -900,31 +1170,43 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
           {/* STEP 1A: SELECT ORDER */}
           {step==="select"&&mode==="order"&&(
             <div>
-              <div style={{fontSize:12,fontWeight:600,color:"#374151",marginBottom:12}}>Select the order this delivery is for:</div>
+              <div style={{fontSize:12,fontWeight:600,color:"#374151",marginBottom:10}}>Select the order this delivery is for:</div>
               {pendingOrders.length===0?(
                 <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><div style={{fontWeight:600}}>No pending orders</div><div style={{fontSize:12,marginTop:4}}>Create an order first, or use "Standalone" mode</div></div>
               ):(
-                <div style={{display:"flex",flexDirection:"column" as const,gap:8}}>
-                  {pendingOrders.map(o=>(
-                    <div key={o.id} onClick={()=>{setSelectedOrderId(o.id);loadOrder(o.id);}}
-                      style={{border:`2px solid ${selectedOrderId===o.id?"#6366f1":"#e5e7eb"}`,borderRadius:10,padding:"14px 18px",cursor:"pointer",background:selectedOrderId===o.id?"#eef2ff":"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}
-                      onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")}
-                      onMouseLeave={e=>(e.currentTarget.style.background=selectedOrderId===o.id?"#eef2ff":"#fff")}>
-                      <div>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:"#6366f1"}}>{o.order_number}</span>
-                          <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:o.status==="PARTIALLY_DELIVERED"?"#fef3c7":"#dbeafe",color:o.status==="PARTIALLY_DELIVERED"?"#92400e":"#1d4ed8"}}>{o.status}</span>
-                        </div>
-                        <div style={{fontSize:13,fontWeight:600,marginTop:4}}>{o.supplier_name||"No supplier"}</div>
-                        <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>{o.item_count} items · ${parseFloat(o.total_amount||0).toFixed(2)} · By {o.ordered_by} · {o.order_date?new Date(o.order_date).toLocaleDateString():""}</div>
+                <>
+                  <input value={grOrderSearch} onChange={e=>setGrOrderSearch(e.target.value)}
+                    placeholder="Search by order #, supplier, or date..."
+                    style={{...s.input,marginBottom:10,width:"100%"}}/>
+                  {(()=>{
+                    const q=grOrderSearch.toLowerCase();
+                    const filtered=pendingOrders.filter(o=>!q||(o.order_number||"").toLowerCase().includes(q)||(o.supplier_name||"").toLowerCase().includes(q)||(o.order_date||"").includes(q));
+                    if(filtered.length===0)return <div style={{padding:20,textAlign:"center",color:"#9ca3af",background:"#f9fafb",borderRadius:8}}>No orders match "{grOrderSearch}"</div>;
+                    return(
+                      <div style={{display:"flex",flexDirection:"column" as const,gap:8,maxHeight:360,overflowY:"auto" as const}}>
+                        {filtered.map(o=>(
+                          <div key={o.id} onClick={()=>{setSelectedOrderId(o.id);loadOrder(o.id);}}
+                            style={{border:`2px solid ${selectedOrderId===o.id?"#6366f1":"#e5e7eb"}`,borderRadius:10,padding:"14px 18px",cursor:"pointer",background:selectedOrderId===o.id?"#eef2ff":"#fff",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}
+                            onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")}
+                            onMouseLeave={e=>(e.currentTarget.style.background=selectedOrderId===o.id?"#eef2ff":"#fff")}>
+                            <div>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:"#6366f1"}}>{o.order_number}</span>
+                                <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:o.status==="PARTIALLY_DELIVERED"?"#fef3c7":"#dbeafe",color:o.status==="PARTIALLY_DELIVERED"?"#92400e":"#1d4ed8"}}>{o.status}</span>
+                              </div>
+                              <div style={{fontSize:13,fontWeight:600,marginTop:4}}>{o.supplier_name||"No supplier"}</div>
+                              <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>{o.item_count} items · By {o.ordered_by}{o.order_date?" · "+new Date(o.order_date).toLocaleDateString():""}</div>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              {loadingOrder&&selectedOrderId===o.id&&<span style={{fontSize:12,color:"#9ca3af"}}>Loading...</span>}
+                              <span style={{fontSize:20}}>→</span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        {loadingOrder&&selectedOrderId===o.id&&<span style={{fontSize:12,color:"#9ca3af"}}>Loading...</span>}
-                        <span style={{fontSize:20}}>→</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    );
+                  })()}
+                </>
               )}
             </div>
           )}
@@ -938,7 +1220,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
                   <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Received By *</label><input style={s.input} value={receivedBy} onChange={e=>setReceivedBy(e.target.value)} placeholder="Your name"/></div>
                   <div style={s.fgroup}><label style={s.label}>Supplier</label>
                     <select style={s.input} value={supplierId} onChange={e=>{const sp=tibbnaSuppliers.find((s:any)=>s.id===e.target.value);setSupplierId(e.target.value);setSupplierName(sp?.name||"");}}>
-                      <option value="">— Select supplier (optional) —</option>
+                      <option value="">— Select supplier —</option>
                       {tibbnaSuppliers.map((sp:any)=><option key={sp.id} value={sp.id}>{sp.name}{sp.city?` · ${sp.city}`:""}</option>)}
                     </select>
                   </div>
@@ -977,16 +1259,17 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
               {lines.length>0&&(
                 <div style={{border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden",marginBottom:8}}>
                   <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Item","UOM","Qty Received","Delivered Total",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["Item","Unit","Reg. Number","Qty Received","Return Qty","Return Note",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
                     <tbody>
                       {lines.map((l,i)=>(
                         <tr key={i}>
                           <td style={{...s.td,fontWeight:600}}>{l.itemName}</td>
                           <td style={{...s.td,color:"#6b7280"}}>{l.uom}</td>
+                          <td style={s.td}><input type="text" inputMode="numeric" pattern="[0-9]*" value={l.dnRegNum??""} onChange={e=>updateLine(i,"dnRegNum",e.target.value.replace(/[^0-9]/g,""))} style={{...s.input,width:110,padding:"5px 6px"}} placeholder=""/></td>
                           <td style={s.td}><input type="number" min={1} value={l.receivedQty??0} onChange={e=>updateLine(i,"receivedQty",e.target.value)} style={{...s.input,width:80,textAlign:"center" as const,padding:"5px 6px"}}/></td>
-                          <td style={s.td}><input type="number" step="0.01" value={l.deliveredTotal??""} onChange={e=>updateLine(i,"deliveredTotal",e.target.value)} style={{...s.input,width:110,padding:"5px 6px"}} placeholder="Total from DN"/></td>
+                          <td style={s.td}><input type="text" inputMode="numeric" pattern="[0-9]*" value={l.returnClaim??""} onChange={e=>updateLine(i,"returnClaim",e.target.value.replace(/[^0-9]/g,""))} style={{...s.input,width:80,textAlign:"center" as const,padding:"5px 6px",borderColor:"#fca5a5"}} placeholder="0"/></td>
+                          <td style={s.td}><input type="text" value={l.claimNote??""} onChange={e=>updateLine(i,"claimNote",e.target.value)} maxLength={120} style={{...s.input,width:150,padding:"5px 6px"}} placeholder="Return reason..."/></td>
                           <td style={s.td}><button onClick={()=>removeLine(i)} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 7px",cursor:"pointer"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button></td>
-
                         </tr>
                       ))}
                     </tbody>
@@ -1036,7 +1319,7 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
               </div>
               <div style={{border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden",marginBottom:8}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr style={{background:"#f9fafb"}}>{["Item","UOM","Ordered","Received","Diff","Delivered Total"].map(h=><th key={h} style={{...s.th,fontSize:10}}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{background:"#f9fafb"}}>{["Item","Unit","Ordered","Reg. Number","Received","Diff","Return Qty","Return Note"].map(h=><th key={h} style={{...s.th,fontSize:10}}>{h}</th>)}</tr></thead>
                   <tbody>
                     {lines.map((l,i)=>{
                       const diff=l.receivedQty-l.orderedQty;
@@ -1045,18 +1328,15 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
                           <td style={{...s.td,fontWeight:600,minWidth:140}}>{l.itemName}</td>
                           <td style={{...s.td,color:"#6b7280",fontSize:12}}>{l.uom}</td>
                           <td style={{...s.td,fontWeight:700,textAlign:"center" as const}}>{l.orderedQty}</td>
+                          <td style={s.td}><input type="text" inputMode="numeric" pattern="[0-9]*" value={l.dnRegNum??""} onChange={e=>updateLine(i,"dnRegNum",e.target.value.replace(/[^0-9]/g,""))} style={{...s.input,width:100,padding:"5px 6px"}} placeholder=""/></td>
                           <td style={s.td}><input type="number" min={0} value={l.receivedQty??0} onChange={e=>updateLine(i,"receivedQty",e.target.value)} style={{...s.input,width:75,textAlign:"center" as const,padding:"5px 6px",borderColor:diff<0?"#f97316":diff>0?"#22c55e":"#d1d5db",borderWidth:diff!==0?"2px":"1px"}}/></td>
                           <td style={{...s.td,textAlign:"center" as const}}>
                             {diff===0&&<span style={{fontSize:11,color:"#6b7280"}}>—</span>}
                             {diff<0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:10,background:"#fed7aa",color:"#9a3412"}}>{diff}</span>}
                             {diff>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:10,background:"#bbf7d0",color:"#166534"}}>+{diff}</span>}
                           </td>
-                          <td style={s.td}>
-                            {purchaseNote
-                              ?<span style={{fontWeight:700,color:"#374151"}}>{l.deliveredTotal?parseFloat(l.deliveredTotal).toLocaleString():"—"}</span>
-                              :<input type="number" step="0.01" value={l.deliveredTotal??""} onChange={e=>updateLine(i,"deliveredTotal",e.target.value)} style={{...s.input,width:110,padding:"5px 6px"}} placeholder="Total from DN"/>
-                            }
-                          </td>
+                          <td style={s.td}><input type="text" inputMode="numeric" pattern="[0-9]*" value={l.returnClaim??""} onChange={e=>updateLine(i,"returnClaim",e.target.value.replace(/[^0-9]/g,""))} style={{...s.input,width:75,textAlign:"center" as const,padding:"5px 6px",borderColor:"#fca5a5"}} placeholder="0"/></td>
+                          <td style={s.td}><input type="text" value={l.claimNote??""} onChange={e=>updateLine(i,"claimNote",e.target.value)} maxLength={120} style={{...s.input,width:180,padding:"5px 6px"}} placeholder="Return reason..."/></td>
                         </tr>
                       );
                     })}
@@ -1092,203 +1372,77 @@ function NewGoodsReceiptModal({orders,departments,tibbnaSuppliers,purchaseNote,o
 
 
 
-// ── Create Purchase Note Modal ────────────────────────────────────────────────
-function CreatePurchaseNoteModal({orders,tibbnaSuppliers,onClose,onSuccess}:{
-  orders:any[];tibbnaSuppliers:any[];onClose:()=>void;onSuccess:()=>void;
-}){
-  const [selectedOrder,setSelectedOrder]=useState<any>(null);
-  const [orderItems,setOrderItems]=useState<any[]>([]);
-  const [loadingOrder,setLoadingOrder]=useState(false);
-  const [deliveredQtys,setDeliveredQtys]=useState<Record<string,number>>({});
-  const [deliveredTotals,setDeliveredTotals]=useState<Record<string,string>>({});
-  const [createdBy,setCreatedBy]=useState("");
-  const [supplierRef,setSupplierRef]=useState("");
-  const [deliveryDate,setDeliveryDate]=useState(new Date().toISOString().slice(0,10));
-  const [notes,setNotes]=useState("");
-  const [saving,setSaving]=useState(false);
-  const [err,setErr]=useState("");
+// ── Fulfill Requests Section ──────────────────────────────────────────────
+function CreateTransferTab({items,departments,onSuccess}:{items:any[];departments:any[];onSuccess:(msg:string)=>void}){
+  const [form,setForm]=useState({toDepartmentId:"",sentBy:"",notes:""});
+  const [tItems,setTItems]=useState<{itemId:string;itemName:string;quantity:number}[]>([]);
+  const [searchQ,setSearchQ]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+  const set=(k:string,v:any)=>setForm(f=>({...f,[k]:v}));
+  const filtered=items.filter(i=>!searchQ||i.name.toLowerCase().includes(searchQ.toLowerCase()));
 
-  const loadOrder=async(order:any)=>{
-    setSelectedOrder(order);setLoadingOrder(true);
+  const submit=async()=>{
+    if(!form.toDepartmentId||!form.sentBy.trim()||!tItems.length){setError("Department, sender and items are required");return;}
+    setLoading(true);setError("");
     try{
-      const r=await fetch(`/api/hospital/orders/${order.id}`);
-      const d=await r.json();
-      const items=d.items||[];
-      setOrderItems(items);
-      // Pre-fill delivered qty = ordered qty (assume full delivery as default)
-      const qtys:Record<string,number>={};
-      items.forEach((i:any)=>{qtys[i.id]=parseInt(i.ordered_qty)||0;});
-      setDeliveredQtys(qtys);setDeliveredTotals({});
-    }catch{setErr("Failed to load order items");}
-    finally{setLoadingOrder(false);}
-  };
-
-  const save=async()=>{
-    if(!selectedOrder){setErr("Select an order");return;}
-    if(!createdBy.trim()){setErr("Created By is required");return;}
-    setSaving(true);setErr("");
-    try{
-      const res=await fetch("/api/hospital/purchase-notes",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          orderId:selectedOrder.id,orderNumber:selectedOrder.order_number,
-          supplierName:selectedOrder.supplier_name,supplierRef,
-          deliveryDate,createdBy,notes,
-          items:orderItems.map(i=>({
-            itemId:i.item_id||null,itemName:i.item_name,uom:i.uom,
-            orderedQty:parseInt(i.ordered_qty)||0,
-            deliveredQty:deliveredQtys[i.id]||0,
-            deliveredTotal:parseFloat(deliveredTotals[i.id])||null,
-          }))
-        })
-      });
+      const res=await fetch("/api/hospital/transfers",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,items:tItems})});
+      if(!res.ok)throw new Error("Failed to create transfer");
       const data=await res.json();
-      if(!res.ok){setErr(data.error||"Failed");return;}
-      onSuccess();onClose();
-    }catch(e:any){setErr(e?.message||"Network error");}
-    finally{setSaving(false);}
+      onSuccess(`Transfer ${data.transfer_number} created! Delivery Key: ${data.delivery_key}`);
+      setForm({toDepartmentId:"",sentBy:"",notes:""});
+      setTItems([]);
+    }catch(e:any){setError(e.message);}
+    finally{setLoading(false);}
   };
-
-  const sentOrders=orders.filter(o=>o.status==="PENDING"||o.status==="PARTIALLY_DELIVERED");
 
   return(
-    <div style={s.overlay}>
-      <div style={{...s.modal,width:680,maxHeight:"95vh",padding:0,display:"flex",flexDirection:"column" as const}}>
-        <div style={{padding:"18px 24px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <div>
-            <div style={{fontSize:16,fontWeight:700}}>📄 New Purchase Note</div>
-            <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>Simulate what the supplier delivered — enter actual delivered quantities</div>
+    <div style={s.card}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid #f3f4f6"}}>
+        <div style={{fontSize:14,fontWeight:700}}>📤 Create Transfer to Department</div>
+        <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>Select items from central store to transfer to a department. A unique delivery key will be generated for confirmation.</div>
+      </div>
+      <div style={{padding:20}}>
+        {error&&<div style={{background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:16}}>{error}</div>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+          <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>To Department *</label>
+            <select style={s.input} value={form.toDepartmentId} onChange={e=>set("toDepartmentId",e.target.value)}>
+              <option value="">Select department</option>
+              {departments.filter(d=>d.type!=="general").map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
           </div>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
+          <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Sent By *</label><input style={s.input} value={form.sentBy} onChange={e=>set("sentBy",e.target.value)} placeholder="Your name"/></div>
+          <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Notes</label><input style={s.input} value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="Optional notes..."/></div>
         </div>
-
-        <div style={{padding:"20px 24px",overflowY:"auto" as const,flex:1}}>
-          {err&&<div style={{background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:16}}>{err}</div>}
-
-          {/* Step 1: Select order */}
-          <div style={{marginBottom:20}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:10,textTransform:"uppercase" as const,letterSpacing:"0.05em"}}>Select Order</div>
-            {sentOrders.length===0?(
-              <div style={{padding:20,textAlign:"center",color:"#9ca3af",background:"#f9fafb",borderRadius:8}}>No pending orders. Create an order first.</div>
-            ):(
-              <div style={{display:"flex",flexDirection:"column" as const,gap:6}}>
-                {sentOrders.map(o=>(
-                  <div key={o.id} onClick={()=>loadOrder(o)}
-                    style={{border:`2px solid ${selectedOrder?.id===o.id?"#16a34a":"#e5e7eb"}`,borderRadius:8,padding:"12px 16px",cursor:"pointer",background:selectedOrder?.id===o.id?"#f0fdf4":"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}
-                    onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")}
-                    onMouseLeave={e=>(e.currentTarget.style.background=selectedOrder?.id===o.id?"#f0fdf4":"#fff")}>
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:"#16a34a"}}>{o.order_number}</span>
-                        <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8"}}>{o.status}</span>
-                      </div>
-                      <div style={{fontSize:12,color:"#374151",fontWeight:600,marginTop:2}}>{o.supplier_name||"No supplier"}</div>
-                      <div style={{fontSize:11,color:"#6b7280"}}>{o.item_count} items · ${parseFloat(o.total_amount||0).toFixed(2)} · By {o.ordered_by}</div>
-                    </div>
-                    {selectedOrder?.id===o.id&&<span style={{color:"#16a34a",fontWeight:700,fontSize:12}}>✓ Selected</span>}
-                  </div>
-                ))}
-              </div>
-            )}
+        <div style={{marginBottom:12,position:"relative"}}>
+          <label style={{...s.label,marginBottom:6}}>Add Items</label>
+          <div style={{position:"relative"}}>
+            <div style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
+            <input style={{...s.input,paddingLeft:30}} value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search items to add..."/>
           </div>
-
-          {/* Step 2: Note details */}
-          {selectedOrder&&(
-            <>
-              <div style={{background:"#f9fafb",borderRadius:10,padding:16,marginBottom:16}}>
-                <div style={{fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:12,textTransform:"uppercase" as const,letterSpacing:"0.05em"}}>Note Details</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-                  <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Created By *</label><input style={s.input} value={createdBy} onChange={e=>setCreatedBy(e.target.value)} placeholder="Your name"/></div>
-                  <div style={s.fgroup}><label style={s.label}>Delivery Date</label><input type="date" style={s.input} value={deliveryDate} onChange={e=>setDeliveryDate(e.target.value)}/></div>
-                  <div style={s.fgroup}><label style={s.label}>Supplier Invoice / Ref #</label><input style={s.input} value={supplierRef} onChange={e=>setSupplierRef(e.target.value)} placeholder="e.g. INV-2024-001"/></div>
-                  <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Notes</label><input style={s.input} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional..."/></div>
-                </div>
-              </div>
-
-              {/* Step 3: Enter delivered quantities */}
-              {loadingOrder?(
-                <div style={{padding:20,textAlign:"center",color:"#9ca3af"}}>Loading order items...</div>
-              ):(
-                <>
-                  <div style={{fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:8,textTransform:"uppercase" as const,letterSpacing:"0.05em"}}>
-                    Delivered Quantities — enter what the supplier actually sent
-                  </div>
-                  <div style={{border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden"}}>
-                    <table style={{width:"100%",borderCollapse:"collapse"}}>
-                      <thead>
-                        <tr style={{background:"#f9fafb"}}>
-                          {["Item","UOM","Ordered Qty","Delivered Qty","Delivered Total (DN)"].map(h=><th key={h} style={{...s.th,fontSize:10}}>{h}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orderItems.map((item:any)=>{
-                          const ordered=parseInt(item.ordered_qty||0);
-                          const delivered=deliveredQtys[item.id]||0;
-                          const diff=delivered-ordered;
-                          const rowBg=diff<0?"#fff7ed":diff>0?"#f0fdf4":"#fff";
-                          return(
-                            <tr key={item.id} style={{background:rowBg}}>
-                              <td style={{...s.td,fontWeight:600,minWidth:140}}>{item.item_name}</td>
-                              <td style={{...s.td,color:"#6b7280",fontSize:12}}>{item.uom}</td>
-                              <td style={{...s.td,fontWeight:700,textAlign:"center" as const,color:"#374151"}}>{ordered}</td>
-                              <td style={s.td}>
-                                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                  <input type="number" min={0} value={delivered}
-                                    onChange={e=>setDeliveredQtys(p=>({...p,[item.id]:parseInt(e.target.value)||0}))}
-                                    style={{...s.input,width:80,textAlign:"center" as const,padding:"5px 6px",
-                                      borderColor:diff<0?"#f97316":diff>0?"#22c55e":"#d1d5db",
-                                      borderWidth:diff!==0?"2px":"1px"}}/>
-                                  {diff!==0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 6px",borderRadius:10,background:diff<0?"#fed7aa":"#bbf7d0",color:diff<0?"#9a3412":"#166534"}}>{diff>0?"+":""}{diff}</span>}
-                                </div>
-                              </td>
-                              <td style={s.td}><input type="number" step="0.01" value={deliveredTotals[item.id]||""} onChange={e=>setDeliveredTotals(p=>({...p,[item.id]:e.target.value}))} style={{...s.input,width:120,padding:"5px 6px"}} placeholder="Total from DN"/></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Summary */}
-                  <div style={{display:"flex",gap:10,marginTop:10,fontSize:12,flexWrap:"wrap" as const}}>
-                    {orderItems.some(i=>(deliveredQtys[i.id]||0)<parseInt(i.ordered_qty||0))&&(
-                      <div style={{background:"#fff7ed",border:"1px solid #fb923c",borderRadius:8,padding:"6px 12px",color:"#9a3412",fontWeight:600}}>
-                        🟠 {orderItems.filter(i=>(deliveredQtys[i.id]||0)<parseInt(i.ordered_qty||0)).length} item{orderItems.filter(i=>(deliveredQtys[i.id]||0)<parseInt(i.ordered_qty||0)).length!==1?"s":""} short — will trigger partial delivery warning in GR
-                      </div>
-                    )}
-                    {orderItems.some(i=>(deliveredQtys[i.id]||0)>parseInt(i.ordered_qty||0))&&(
-                      <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"6px 12px",color:"#166534",fontWeight:600}}>
-                        🟢 {orderItems.filter(i=>(deliveredQtys[i.id]||0)>parseInt(i.ordered_qty||0)).length} item{orderItems.filter(i=>(deliveredQtys[i.id]||0)>parseInt(i.ordered_qty||0)).length!==1?"s":""} extra — will trigger extra qty confirmation in GR
-                      </div>
-                    )}
-                    {orderItems.length>0&&orderItems.every(i=>(deliveredQtys[i.id]||0)===parseInt(i.ordered_qty||0))&&(
-                      <div style={{background:"#d1fae5",border:"1px solid #6ee7b7",borderRadius:8,padding:"6px 12px",color:"#065f46",fontWeight:600}}>
-                        ✓ All quantities match
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </>
+          {searchQ&&filtered.length>0&&(
+            <div style={{position:"absolute",left:0,right:0,top:"100%",background:"#fff",border:"1px solid #6366f1",borderRadius:8,zIndex:100,maxHeight:200,overflowY:"auto" as const}}>
+              {filtered.slice(0,8).map(item=>(<div key={item.id} onClick={()=>{if(!tItems.find(i=>i.itemId===item.id)){setTItems(t=>[...t,{itemId:item.id,itemName:item.name,quantity:1}]);}setSearchQ("");}} style={{padding:"9px 12px",cursor:"pointer",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center"}} onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")} onMouseLeave={e=>(e.currentTarget.style.background="#fff")}><div><div style={{fontWeight:600,fontSize:13}}>{item.name}</div><div style={{fontSize:11,color:"#9ca3af"}}>{item.itemcode} · {item.uom}</div></div><span style={{fontSize:11,color:"#6366f1",fontWeight:600}}>+ Add</span></div>))}
+            </div>
           )}
         </div>
-
-        <div style={{padding:"14px 24px",borderTop:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <span style={{fontSize:12,color:"#9ca3af"}}>{selectedOrder?`Order: ${selectedOrder.order_number} · ${orderItems.length} items`:"No order selected"}</span>
-          <div style={{display:"flex",gap:10}}>
-            <button onClick={onClose} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
-            <button onClick={save} disabled={saving||!selectedOrder||!createdBy.trim()}
-              style={{...s.btn("green"),minWidth:160,opacity:saving||!selectedOrder||!createdBy.trim()?0.5:1}}>
-              {saving?"Saving...":"✓ Create Purchase Note"}
-            </button>
+        {tItems.length>0&&(
+          <div style={{border:"1px solid #e5e7eb",borderRadius:10,overflow:"hidden",marginBottom:16}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr>{["Item","Quantity",""].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <tbody>{tItems.map(item=>(<tr key={item.itemId}><td style={{...s.td,fontWeight:600}}>{item.itemName}</td><td style={s.td}><input type="text" inputMode="numeric" pattern="[0-9]*" value={item.quantity} onChange={e=>setTItems(t=>t.map(i=>i.itemId===item.itemId?{...i,quantity:parseInt(e.target.value.replace(/[^0-9]/g,""))||1}:i))} style={{...s.input,width:90,textAlign:"center" as const}}/></td><td style={s.td}><button onClick={()=>setTItems(t=>t.filter(i=>i.itemId!==item.itemId))} style={{background:"#fee2e2",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:11,color:"#dc2626"}}>✕</button></td></tr>))}</tbody>
+            </table>
           </div>
+        )}
+        {tItems.length===0&&<div style={{textAlign:"center",padding:"24px 0",color:"#9ca3af",fontSize:13}}>Search and add items above to include in this transfer</div>}
+        <div style={{display:"flex",justifyContent:"flex-end"}}>
+          <button disabled={loading} onClick={submit} style={{...s.btn("blue"),display:"flex",alignItems:"center",gap:6}}>{loading?"Creating...":"📤 Send Transfer"}</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Fulfill Requests Section ──────────────────────────────────────────────
 function FulfillRequestsSection({departments,onRefresh}:{departments:any[];onRefresh:()=>void}){
   const [requests,setRequests]=useState<any[]>([]);
   const [expandedId,setExpandedId]=useState<string|null>(null);
@@ -1443,8 +1597,12 @@ function FulfillRequestsSection({departments,onRefresh}:{departments:any[];onRef
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function HospitalPage(){
-  type Tab="items"|"stock"|"history"|"manufacturers"|"storage"|"departments"|"transfers"|"uom"|"orders"|"pn"|"gr"|"reports"|"wastage";
+  type Tab="items"|"stock"|"history"|"manufacturers"|"storage"|"departments"|"transfers"|"uom"|"orders"|"gr"|"reports"|"wastage"|"dispense";
   const [tab,setTab]=useState<Tab>("items");
+  const [confirmTrf,setConfirmTrf]=useState<any>(null);
+  const [confirmKey,setConfirmKey]=useState("");
+  const [confirmReceiver,setConfirmReceiver]=useState("");
+  const [confirmErr,setConfirmErr]=useState("");
   const [items,setItems]=useState<any[]>([]);
   const [stock,setStock]=useState<any[]>([]);
   const [departments,setDepartments]=useState<any[]>([]);
@@ -1468,9 +1626,7 @@ export default function HospitalPage(){
   const [reportType,setReportType]=useState<"stock"|"consumption">("stock");
   const [hospitalOrders,setHospitalOrders]=useState<any[]>([]);
   const [goodsReceipts,setGoodsReceipts]=useState<any[]>([]);
-  const [purchaseNotes,setPurchaseNotes]=useState<any[]>([]);
-  const [showPurchaseNoteModal,setShowPurchaseNoteModal]=useState(false);
-  const [pnStatusFilter,setPnStatusFilter]=useState('ALL');
+  const [grSearch,setGrSearch]=useState("");
   const [orderStatusFilter,setOrderStatusFilter]=useState('ALL');
   const [orderSearch,setOrderSearch]=useState('');
   const [grStatusFilter,setGrStatusFilter]=useState('ALL');
@@ -1479,10 +1635,26 @@ export default function HospitalPage(){
   const [orderCart,setOrderCart]=useState<any[]>([]);
   const [showGRModal,setShowGRModal]=useState(false);
   const [showNewGRModal,setShowNewGRModal]=useState(false);
-  const [pNForGR,setPNForGR]=useState<any>(null);
-  const [viewPNDetail,setViewPNDetail]=useState<any>(null);
+  const [showCorrectionModal,setShowCorrectionModal]=useState(false);
+
   const [viewOrderId,setViewOrderId]=useState<string|null>(null);
   const [viewOrderDetail,setViewOrderDetail]=useState<any>(null);
+  const [editOrderData,setEditOrderData]=useState<any>(null);
+  const [orderDateFrom,setOrderDateFrom]=useState("");
+  const [orderDateTo,setOrderDateTo]=useState("");
+  const [cancelOrderId,setCancelOrderId]=useState<string|null>(null);
+  const [cancelReason,setCancelReason]=useState("");
+  const [cancelSaving,setCancelSaving]=useState(false);
+  // Pagination pages
+  const [orderPage,setOrderPage]=useState(1);
+  const [grPage,setGrPage]=useState(1);
+  const [stockPage,setStockPage]=useState(1);
+  const [transferPage,setTransferPage]=useState(1);
+  const [mfrPage,setMfrPage]=useState(1);
+  // Transfer search
+  const [transferSearch,setTransferSearch]=useState("");
+  const [transferDateFrom,setTransferDateFrom]=useState("");
+  const [transferDateTo,setTransferDateTo]=useState("");
   const [viewGRId,setViewGRId]=useState<string|null>(null);
   const [viewGRDetail,setViewGRDetail]=useState<any>(null);
   const [tibbnaSuppliers,setTibbnaSuppliers]=useState<any[]>([]);
@@ -1496,6 +1668,7 @@ export default function HospitalPage(){
   const [toast,setToast]=useState("");
   // Modals
   const [showTransfer,setShowTransfer]=useState(false);
+  const [showCreateTransfer,setShowCreateTransfer]=useState(false);
   const [viewItem,setViewItem]=useState<any>(null);
   const [editItem,setEditItem]=useState<any>(null);
   // PR cart
@@ -1522,6 +1695,36 @@ export default function HospitalPage(){
 
   const showToast=(msg:string)=>{setToast(msg);setTimeout(()=>setToast(""),3000);};
 
+  const printTransfer=async(t:any)=>{
+    const r=await fetch(`/api/hospital/transfers/${t.id}`);
+    const tItems=await r.json();
+    const w=window.open("","_blank","width=820,height=640");
+    if(!w)return;
+    w.document.write(`<!DOCTYPE html><html><head><title>Transfer ${t.transfer_number}</title><style>
+      body{font-family:Arial,sans-serif;padding:32px;color:#111;margin:0;}
+      h2{margin:0 0 4px;font-size:18px;}
+      .meta{font-size:13px;color:#555;margin-bottom:20px;}
+      .key-box{border:2px solid #6366f1;border-radius:10px;padding:16px 24px;margin-bottom:24px;background:#eef2ff;display:inline-block;}
+      .key-label{font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+      .key-val{font-size:38px;font-weight:900;font-family:monospace;letter-spacing:.25em;color:#4338ca;}
+      table{width:100%;border-collapse:collapse;margin-top:16px;}
+      th{padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;background:#f9fafb;border-bottom:2px solid #e5e7eb;}
+      td{padding:10px 12px;font-size:13px;border-bottom:1px solid #e5e7eb;}
+      .footer{margin-top:32px;font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:12px;}
+      @media print{body{padding:16px;}}
+    </style></head><body>
+      <h2>📦 Stock Transfer — ${t.transfer_number}</h2>
+      <div class="meta">To: <strong>${t.department_name??""}</strong> &nbsp;·&nbsp; Sent by: <strong>${t.sent_by??""}</strong> &nbsp;·&nbsp; Date: <strong>${new Date(t.createdat).toLocaleDateString()}</strong></div>
+      <div class="key-box"><div class="key-label">Delivery Key — Required for department to confirm receipt</div><div class="key-val">${t.delivery_key??""}</div></div>
+      <table>
+        <thead><tr><th>#</th><th>Item</th><th>Quantity</th></tr></thead>
+        <tbody>${(Array.isArray(tItems)?tItems:[]).map((item:any,idx:number)=>`<tr><td>${idx+1}</td><td>${item.item_name??""}</td><td>${item.quantity??""}</td></tr>`).join("")}</tbody>
+      </table>
+      <div class="footer">Department staff: use this Delivery Key together with the receiver's name to confirm receipt in the system.</div>
+    </body></html>`);
+    w.document.close();w.focus();w.print();
+  };
+
   const fetchItems=useCallback(async()=>{setLoading(true);try{const r=await fetch(`/api/hospital/items?search=${encodeURIComponent(search)}`);const d=await r.json();setItems(Array.isArray(d)?d:[]);}catch(e){console.error('fetchItems error:',e);}finally{setLoading(false);}},[search]);
   const fetchStock=useCallback(async()=>{try{const r=await fetch("/api/hospital/stock");const d=await r.json();setStock(Array.isArray(d)?d:[]);}catch(e){console.error('fetchStock:',e);}},[]);
   const fetchDepartments=useCallback(async()=>{try{const r=await fetch("/api/hospital/departments");const d=await r.json();setDepartments(Array.isArray(d)?d:[]);}catch(e){console.error("fetchDepartments:",e);}},[]);
@@ -1537,7 +1740,6 @@ export default function HospitalPage(){
   const fetchTibbnaDepartments=useCallback(async()=>{try{const r=await fetch("/api/hospital/departments");const d=await r.json();setDepartments(Array.isArray(d)?d:[]);}catch(e){console.error("fetchDepts:",e);}},[]);
   const addToOrderCart=(item:any)=>{setOrderCart(c=>{if(c.find((i:any)=>i.id===item.id)){showToast(`${item.name} already in cart`);return c;}showToast(`${item.name} added to order cart`);return[...c,{...item,qty:1,unitCost:String(item.unit_cost||'')}];});};
   const fetchHospitalOrders=useCallback(async()=>{try{const r=await fetch(`/api/hospital/orders?status=${orderStatusFilter==="ALL"?"":orderStatusFilter}`);const d=await r.json();setHospitalOrders(Array.isArray(d)?d:[]);}catch(e){console.error(e);}},[orderStatusFilter]);
-  const fetchPurchaseNotes=useCallback(async()=>{try{const r=await fetch(`/api/hospital/purchase-notes?status=${pnStatusFilter==="ALL"?"":pnStatusFilter}`);const d=await r.json();setPurchaseNotes(Array.isArray(d)?d:[]);}catch(e){console.error(e);}},[pnStatusFilter]);
   const fetchGoodsReceipts=useCallback(async()=>{try{const r=await fetch(`/api/hospital/goods-receipt?status=${grStatusFilter==="ALL"?"":grStatusFilter}`);const d=await r.json();setGoodsReceipts(Array.isArray(d)?d:[]);}catch(e){console.error(e);}},[grStatusFilter]);
   const fetchUom=useCallback(async()=>{const r=await fetch("/api/uom");const d=await r.json();setUomConversions(Array.isArray(d)?d:[]);},[]);
 
@@ -1552,8 +1754,11 @@ export default function HospitalPage(){
   useEffect(()=>{if(tab==="reports")fetchReports();},[tab,reportType,fetchReports]);
   useEffect(()=>{if(tab==="uom")fetchUom();},[tab,fetchUom]);
   useEffect(()=>{if(tab==="orders")fetchHospitalOrders();},[tab,orderStatusFilter,fetchHospitalOrders]);
+  useEffect(()=>{setOrderPage(1);},[orderStatusFilter,orderSearch,orderDateFrom,orderDateTo]);
   useEffect(()=>{if(tab==="gr")fetchGoodsReceipts();},[tab,grStatusFilter,fetchGoodsReceipts]);
-  useEffect(()=>{if(tab==="gr")fetchPurchaseNotes();},[tab,pnStatusFilter,fetchPurchaseNotes]);
+  useEffect(()=>{setGrPage(1);},[grStatusFilter,grSearch]);
+  useEffect(()=>{setTransferPage(1);},[transferStatus,transferSearch,transferDateFrom,transferDateTo]);
+  useEffect(()=>{setMfrPage(1);},[]);
   // Wastage
   const [wastageRecords,setWastageRecords]=useState<any[]>([]);
   const [wastageLoading,setWastageLoading]=useState(false);
@@ -1562,6 +1767,21 @@ export default function HospitalPage(){
   const [wastageSearch,setWastageSearch]=useState("");
   const fetchWastage=useCallback(async()=>{setWastageLoading(true);try{const r=await fetch("/api/hospital/wastage");const d=await r.json();setWastageRecords(Array.isArray(d)?d:[]);}catch(e){console.error(e);}finally{setWastageLoading(false);}},[]);
   useEffect(()=>{if(tab==="wastage")fetchWastage();},[tab,fetchWastage]);
+  // Dispense
+  const [dispenses,setDispenses]=useState<any[]>([]);
+  const [dispenseSearch,setDispenseSearch]=useState("");
+  const [dispenseDateFrom,setDispenseDateFrom]=useState("");
+  const [dispenseDateTo,setDispenseDateTo]=useState("");
+  const [dispensePage,setDispensePage]=useState(1);
+  const [showDispenseModal,setShowDispenseModal]=useState(false);
+  const [dispenseItems,setDispenseItems]=useState<{itemId:string;itemName:string;uom:string;available:number;quantity:string;reason:string;sourceDeptId:string}[]>([]);
+  const [dispenseBy,setDispenseBy]=useState("");
+  const [dispenseNotes,setDispenseNotes]=useState("");
+  const [dispenseItemQ,setDispenseItemQ]=useState("");
+  const [dispenseSaving,setDispenseSaving]=useState(false);
+  const [dispenseErr,setDispenseErr]=useState("");
+  const fetchDispenses=useCallback(async()=>{const r=await fetch("/api/hospital/dispenses");const d=await r.json();setDispenses(Array.isArray(d)?d:[]);},[]);
+  useEffect(()=>{if(tab==="dispense"){fetchDispenses();fetchStock();fetchItems();}},[tab,fetchDispenses,fetchStock,fetchItems]);
 
 
 
@@ -1572,13 +1792,19 @@ export default function HospitalPage(){
   const pendingOrders=hospitalOrders.filter((o:any)=>o.status==="PENDING").length;
 
   const tabLabels:Record<Tab,string>={
-    items:`Items (${totalItems})`,stock:"Stock",history:"History",
-    manufacturers:"🏭 Manufacturers",storage:"📍 Storage",
-    departments:`🏥 Depts (${totalDepts})`,
-    transfers:`🔄 Transfers${transfers.filter(t=>t.status==="PENDING").length>0?` (${transfers.filter(t=>t.status==="PENDING").length})`:""}`,
-    uom:"UOM",
+    items:`Items (${totalItems})`,
+    stock:"Stock",
+    transfers:`📦 Stock Request${transfers.filter(t=>t.status==="PENDING").length>0?` (${transfers.filter(t=>t.status==="PENDING").length})`:""}`,
+    storage:"📍 Storage",
     orders:`📋 Create Order${orderCart.length>0?" ("+orderCart.length+")":""}`,
-    pn:"📄 Purchase Notes",gr:"📥 Goods Receipt",reports:"📊 Reports",wastage:"🗑️ Wastage",
+    gr:"📥 Goods Receipt",
+    dispense:"💊 Dispense",
+    wastage:"🗑️ Wastage",
+    history:"History",
+    departments:`🏥 Depts (${totalDepts})`,
+    uom:"📐 Item Units",
+    reports:"📊 Reports",
+    manufacturers:"🏭 Manufacturers",
   };
 
   return(
@@ -1667,7 +1893,6 @@ export default function HospitalPage(){
                             <div style={{display:"flex",gap:4}}>
                               <button onClick={()=>setViewItem(item)} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="View + Batches"><Icon d={icons.eye} size={12} color="#2563eb"/></button>
                               <button onClick={()=>addToOrderCart(item)} style={{background:"#fef3c7",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:11,fontWeight:700,color:"#92400e"}} title="Add to order cart">🛒+</button>
-                              <button onClick={()=>{setEditItem(item);setEditStockForm({name:item.name,generic_name:item.generic_name??"",uom:item.uom,unit_cost:item.unit_cost??"",selling_price:item.selling_price??"",reorder_level:item.reorder_level??"",quantity:item.total_stock??""});}} style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="Edit"><Icon d={icons.edit} size={12} color="#16a34a"/></button>
                             </div>
                           </td>
                         </tr>
@@ -1709,34 +1934,38 @@ export default function HospitalPage(){
                 <span style={{fontSize:13,fontWeight:600}}>Stock Overview — All Departments</span>
                 <button onClick={fetchStock} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:12}}>Refresh</button>
               </div>
-              {stock.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No stock data yet</div>:(
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Item","Code","Department","Stock","Available","Reorder","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {stock.map((row:any,i:number)=>{
-                        const avail=parseInt(row.quantity||0)-parseInt(row.reserved_quantity||0);
-                        const stc=sc(avail,parseInt(row.reorder_level||0));
-                        return(
-                          <tr key={i}>
-                            <td style={{...s.td,fontWeight:600}}>{row.name}</td>
-                            <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{row.itemcode}</td>
-                            <td style={s.td}><span style={s.badge(row.department_name?"#eef2ff":"#f0fdf4",row.department_name?"#6366f1":"#16a34a")}>{row.department_name??"🏥 Central Store"}</span></td>
-                            <td style={{...s.td,fontWeight:700}}>{row.quantity||0}</td>
-                            <td style={{...s.td,fontWeight:700,color:stc.color}}>{avail}</td>
-                            <td style={{...s.td,color:"#6b7280"}}>{row.reorder_level||0}</td>
-                            <td style={s.td}><span style={s.badge(stc.bg,stc.color)}>{stc.label}</span></td>
-                            <td style={s.td}><div style={{display:"flex",gap:4}}>
-                              <button onClick={()=>{setEditItem(row);setEditStockForm({name:row.name,generic_name:row.generic_name??"",uom:row.uom,unit_cost:row.unit_cost??"",selling_price:row.selling_price??"",reorder_level:row.reorder_level??"",quantity:row.quantity??""});}} style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}}><Icon d={icons.edit} size={12} color="#16a34a"/></button>
-                              <button onClick={()=>addToOrderCart(row)} style={{background:"#fef3c7",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:10,fontWeight:700,color:"#92400e"}}>🛒+</button>
-                            </div></td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              {stock.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No stock data yet</div>:(()=>{
+                const pagedStock=stock.slice((stockPage-1)*PG,stockPage*PG);
+                return(<>
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr>{["Item","Code","Department","Stock","Available","Reorder","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {pagedStock.map((row:any,i:number)=>{
+                          const avail=parseInt(row.quantity||0)-parseInt(row.reserved_quantity||0);
+                          const stc=sc(avail,parseInt(row.reorder_level||0));
+                          return(
+                            <tr key={i}>
+                              <td style={{...s.td,fontWeight:600}}>{row.name}</td>
+                              <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6b7280"}}>{row.itemcode}</td>
+                              <td style={s.td}><span style={s.badge(row.department_name?"#eef2ff":"#f0fdf4",row.department_name?"#6366f1":"#16a34a")}>{row.department_name??"🏥 Central Store"}</span></td>
+                              <td style={{...s.td,fontWeight:700}}>{row.quantity||0}</td>
+                              <td style={{...s.td,fontWeight:700,color:stc.color}}>{avail}</td>
+                              <td style={{...s.td,color:"#6b7280"}}>{row.reorder_level||0}</td>
+                              <td style={s.td}><span style={s.badge(stc.bg,stc.color)}>{stc.label}</span></td>
+                              <td style={s.td}><div style={{display:"flex",gap:4}}>
+                                <button onClick={()=>{setEditItem(row);setEditStockForm({name:row.name,generic_name:row.generic_name??"",uom:row.uom,unit_cost:row.unit_cost??"",selling_price:row.selling_price??"",reorder_level:row.reorder_level??"",quantity:row.quantity??""});}} style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}}><Icon d={icons.edit} size={12} color="#16a34a"/></button>
+                                <button onClick={()=>addToOrderCart(row)} style={{background:"#fef3c7",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer",fontSize:10,fontWeight:700,color:"#92400e"}}>🛒+</button>
+                              </div></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination page={stockPage} total={stock.length} onPage={setStockPage}/>
+                </>);
+              })()}
             </div>
           </>
         )}
@@ -1919,18 +2148,22 @@ export default function HospitalPage(){
               <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{historyTotal} total</span>
             </div>
             {history.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No history yet</div>:(
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Item","Action","Qty","Department","Reference","By","Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {history.map((h:any)=>{
-                      const colorMap:Record<string,[string,string]>={STOCK_IN:["#d1fae5","#065f46"],STOCK_OUT:["#fee2e2","#991b1b"],TRANSFER:["#dbeafe","#1d4ed8"],DISPENSE:["#ede9fe","#5b21b6"]};
-                      const [bg,color]=colorMap[h.action_type]??["#f3f4f6","#374151"];
-                      return(<tr key={h.id}><td style={{...s.td,fontWeight:600}}>{h.item_name??"—"}</td><td style={s.td}><span style={s.badge(bg,color)}>{h.action_type}</span></td><td style={{...s.td,fontWeight:700,color:h.action_type==="STOCK_IN"||h.action_type==="TRANSFER"?"#16a34a":"#dc2626"}}>{h.action_type==="STOCK_IN"||h.action_type==="TRANSFER"?"+":"-"}{h.quantity}</td><td style={{...s.td,fontSize:12,color:"#6b7280"}}>{h.department_name??"—"}</td><td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{h.reference_id??"—"}</td><td style={s.td}>{h.created_by??"—"}</td><td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(h.createdat).toLocaleDateString()}</td></tr>);
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr>{["Item","Action","Qty","Department","Reference","By","Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {history.map((h:any)=>{
+                        const colorMap:Record<string,[string,string]>={STOCK_IN:["#d1fae5","#065f46"],STOCK_OUT:["#fee2e2","#991b1b"],TRANSFER:["#dbeafe","#1d4ed8"],DISPENSE:["#ede9fe","#5b21b6"],CORRECTION_REVERSAL:["#fef3c7","#92400e"],CORRECTION_IN:["#dbeafe","#1e40af"]};
+                        const [bg,color]=colorMap[h.action_type]??["#f3f4f6","#374151"];
+                        const isPositive=["STOCK_IN","TRANSFER","CORRECTION_IN"].includes(h.action_type);
+                        return(<tr key={h.id}><td style={{...s.td,fontWeight:600}}>{h.item_name??"—"}</td><td style={s.td}><span style={s.badge(bg,color)}>{h.action_type}</span></td><td style={{...s.td,fontWeight:700,color:isPositive?"#16a34a":"#dc2626"}}>{isPositive?"+":""}{h.quantity}</td><td style={{...s.td,fontSize:12,color:"#6b7280"}}>{h.department_name??"—"}</td><td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{h.reference_id??"—"}</td><td style={s.td}>{h.created_by??"—"}</td><td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(h.createdat).toLocaleDateString()}</td></tr>);
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination page={historyPage} total={historyTotal} onPage={p=>{setHistoryPage(p);}}/>
+              </>
             )}
           </div>
         </>)}
@@ -1976,13 +2209,19 @@ export default function HospitalPage(){
                 </div>
               </div></div>
             )}
-            <table style={{width:"100%",borderCollapse:"collapse"}}>
-              <thead><tr>{["Name","Code","Country","Contact","Email","Products","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-              <tbody>
-                {manufacturers.length===0&&<tr><td colSpan={7} style={{...s.td,textAlign:"center",padding:40,color:"#9ca3af"}}>No manufacturers yet</td></tr>}
-                {manufacturers.map(m=>(<tr key={m.id}><td style={{...s.td,fontWeight:600}}>{m.name}</td><td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{m.code||"—"}</td><td style={s.td}>{m.country||"—"}</td><td style={s.td}>{m.contact_name||"—"}</td><td style={{...s.td,color:"#6366f1",fontSize:12}}>{m.email||"—"}</td><td style={{...s.td,fontSize:12,color:"#6b7280"}}>{m.product_types||"—"}</td><td style={s.td}><div style={{display:"flex",gap:4}}><button onClick={()=>setEditMfr({...m})} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}}><Icon d={icons.edit} size={12} color="#2563eb"/></button><button onClick={async()=>{if(confirm(`Delete ${m.name}?`)){await fetch("/api/hospital/manufacturers",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:m.id})});fetchManufacturers();showToast("Deleted");}}} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button></div></td></tr>))}
-              </tbody>
-            </table>
+            {(()=>{
+              const pagedMfr=manufacturers.slice((mfrPage-1)*PG,mfrPage*PG);
+              return(<>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>{["Name","Code","Country","Contact","Email","Products","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {manufacturers.length===0&&<tr><td colSpan={7} style={{...s.td,textAlign:"center",padding:40,color:"#9ca3af"}}>No manufacturers yet</td></tr>}
+                    {pagedMfr.map(m=>(<tr key={m.id}><td style={{...s.td,fontWeight:600}}>{m.name}</td><td style={{...s.td,fontFamily:"monospace",fontSize:11}}>{m.code||"—"}</td><td style={s.td}>{m.country||"—"}</td><td style={s.td}>{m.contact_name||"—"}</td><td style={{...s.td,color:"#6366f1",fontSize:12}}>{m.email||"—"}</td><td style={{...s.td,fontSize:12,color:"#6b7280"}}>{m.product_types||"—"}</td><td style={s.td}><div style={{display:"flex",gap:4}}><button onClick={()=>setEditMfr({...m})} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}}><Icon d={icons.edit} size={12} color="#2563eb"/></button><button onClick={async()=>{if(confirm(`Delete ${m.name}?`)){await fetch("/api/hospital/manufacturers",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:m.id})});fetchManufacturers();showToast("Deleted");}}} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button></div></td></tr>))}
+                  </tbody>
+                </table>
+                <Pagination page={mfrPage} total={manufacturers.length} onPage={setMfrPage}/>
+              </>);
+            })()}
           </div>
         )}
 
@@ -2129,51 +2368,86 @@ export default function HospitalPage(){
           </div>
         )}
 
-        {/* ── TRANSFERS TAB ─────────────────────────────────────────────── */}
+        {/* ── STOCK REQUEST TAB ─────────────────────────────────────────── */}
         {tab==="transfers"&&(
           <div>
+            {showCreateTransfer&&(
+              <div style={s.overlay} onClick={()=>setShowCreateTransfer(false)}>
+                <div style={{width:720,maxHeight:"92vh",overflowY:"auto",borderRadius:12}} onClick={e=>e.stopPropagation()}>
+                  <div style={{background:"#fff",borderRadius:"12px 12px 0 0",padding:"14px 20px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontWeight:700,fontSize:15}}>📤 Create Transfer</span>
+                    <button onClick={()=>setShowCreateTransfer(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#6b7280"}}>✕</button>
+                  </div>
+                  <CreateTransferTab items={items} departments={departments} onSuccess={(msg)=>{fetchTransfers();showToast(msg);setShowCreateTransfer(false);}}/>
+                </div>
+              </div>
+            )}
+
             <FulfillRequestsSection departments={departments} onRefresh={()=>{fetchTransfers();fetchStock();showToast("Transfer dispatched! Department can now receive it.");}}/>
 
-            {/* Regular (non-request) transfers */}
             <div style={s.card}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" as const}}>
                 <span style={{fontSize:13,fontWeight:600}}>All Transfers</span>
                 <div style={{display:"flex",gap:5}}>
-                  {["ALL","PENDING","RECEIVED","CANCELLED"].map(st=>(
+                  {["ALL","PENDING","RECEIVED","REQUESTED","CANCELLED"].map(st=>(
                     <button key={st} onClick={()=>setTransferStatus(st)} style={{padding:"4px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${transferStatus===st?"#6366f1":"#e5e7eb"}`,background:transferStatus===st?"#6366f1":"#f9fafb",color:transferStatus===st?"#fff":"#374151"}}>{st}</button>
                   ))}
                 </div>
+                <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+                  <div style={{position:"absolute",left:8,pointerEvents:"none"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
+                  <input placeholder="Search transfer #, department..." value={transferSearch} onChange={e=>setTransferSearch(e.target.value)} style={{...s.input,width:200,paddingLeft:26,fontSize:12}}/>
+                </div>
+                <input type="date" value={transferDateFrom} onChange={e=>setTransferDateFrom(e.target.value)} style={{...s.input,width:136,fontSize:12,padding:"5px 8px"}} title="From date"/>
+                <input type="date" value={transferDateTo} onChange={e=>setTransferDateTo(e.target.value)} style={{...s.input,width:136,fontSize:12,padding:"5px 8px"}} title="To date"/>
+                {(transferDateFrom||transferDateTo)&&<button onClick={()=>{setTransferDateFrom("");setTransferDateTo("");}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:11,padding:"4px 8px"}}>✕ Clear</button>}
                 <button onClick={fetchTransfers} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:5}}><Icon d={icons.refresh} size={13}/></button>
+                <button onClick={()=>setShowCreateTransfer(true)} style={{...s.btn("blue"),display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap" as const}}>📤 Create Transfer</button>
                 <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{transfers.length} transfers</span>
               </div>
-              {transfers.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No transfers yet. Click "Transfer" button to create one.</div>:(
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Transfer #","To Department","Items","Sent By","Created","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {transfers.filter(t=>transferStatus==="ALL"||t.status===transferStatus).map(t=>{
-                        const isReq=(t.sent_by||"").startsWith("REQUEST by");
-                        const stc=statusColors[t.status]??{bg:"#f3f4f6",color:"#374151"};
-                        return(
-                          <tr key={t.id} style={{opacity:isReq?0.5:1}}>
-                            <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6366f1"}}>{t.transfer_number}</td>
-                            <td style={{...s.td,fontWeight:600}}>{t.department_name??"—"}</td>
-                            <td style={{...s.td,fontWeight:600}}>{t.item_count??0} items</td>
-                            <td style={s.td}>{isReq?<span style={{fontSize:11,color:"#d97706",fontWeight:600}}>⏳ Pending fulfillment</span>:t.sent_by}</td>
-                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(t.createdat).toLocaleDateString()}</td>
-                            <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:stc.bg,color:stc.color}}>{isReq?"REQUESTED":t.status}</span></td>
-                            <td style={s.td}>
-                              {t.status==="PENDING"&&!isReq&&(
-                                <button onClick={async()=>{await fetch(`/api/hospital/transfers/${t.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"CANCELLED"})});fetchTransfers();showToast("Cancelled");}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:11,padding:"3px 8px"}}>Cancel</button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              {(()=>{
+                if(transfers.length===0)return<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No transfers yet. Click "📤 Create Transfer" to send items to a department.</div>;
+                const tq=transferSearch.toLowerCase();
+                const filteredT=transfers.filter(t=>{
+                  if(transferStatus!=="ALL"&&t.status!==transferStatus)return false;
+                  if(tq&&!(t.transfer_number||"").toLowerCase().includes(tq)&&!(t.department_name||"").toLowerCase().includes(tq))return false;
+                  if(transferDateFrom&&t.createdat&&new Date(t.createdat)<new Date(transferDateFrom))return false;
+                  if(transferDateTo&&t.createdat&&new Date(t.createdat)>new Date(transferDateTo+"T23:59:59"))return false;
+                  return true;
+                });
+                const pagedT=filteredT.slice((transferPage-1)*PG,transferPage*PG);
+                return(<>
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr>{["Transfer #","To Department","Items","Sent By","Delivery Key","Created","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {pagedT.map(t=>{
+                          const isReq=t.status==="REQUESTED"||(t.sent_by||"").startsWith("REQUEST by");
+                          const stc=statusColors[t.status]??{bg:"#f3f4f6",color:"#374151"};
+                          return(
+                            <tr key={t.id}>
+                              <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6366f1"}}>{t.transfer_number}</td>
+                              <td style={{...s.td,fontWeight:600}}>{t.department_name??"—"}</td>
+                              <td style={{...s.td,fontWeight:600}}>{t.item_count??0} items</td>
+                              <td style={s.td}>{isReq?<span style={{fontSize:11,color:"#d97706",fontWeight:600}}>⏳ Pending fulfillment</span>:t.sent_by}</td>
+                              <td style={{...s.td,fontFamily:"monospace",fontSize:13,fontWeight:700,color:"#4338ca",letterSpacing:"0.12em"}}>{t.delivery_key?t.delivery_key:"—"}</td>
+                              <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{new Date(t.createdat).toLocaleDateString()}</td>
+                              <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:stc.bg,color:stc.color}}>{isReq?"REQUESTED":t.status}</span></td>
+                              <td style={s.td}>
+                                <div style={{display:"flex",gap:5,flexWrap:"wrap" as const}}>
+                                  {t.status==="PENDING"&&!isReq&&<button onClick={()=>printTransfer(t)} style={{...s.btn("ghost"),border:"1px solid #6366f1",fontSize:11,padding:"3px 8px",color:"#6366f1"}}>🖨 Print</button>}
+                                  {t.status==="PENDING"&&!isReq&&<button onClick={()=>{setConfirmTrf(t);setConfirmKey("");setConfirmReceiver("");setConfirmErr("");}} style={{...s.btn("green"),fontSize:11,padding:"3px 8px"}}>✓ Confirm</button>}
+                                  {t.status==="PENDING"&&!isReq&&<button onClick={async()=>{await fetch(`/api/hospital/transfers/${t.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"CANCELLED"})});fetchTransfers();showToast("Cancelled");}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:11,padding:"3px 8px"}}>Cancel</button>}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination page={transferPage} total={filteredT.length} onPage={setTransferPage}/>
+                </>);
+              })()}
             </div>
           </div>
         )}
@@ -2209,119 +2483,85 @@ export default function HospitalPage(){
                 <div style={{position:"absolute",left:8,pointerEvents:"none"}}><Icon d={icons.search} size={13} color="#9ca3af"/></div>
                 <input placeholder="Search order #, supplier, by..." value={orderSearch} onChange={e=>setOrderSearch(e.target.value)} style={{...s.input,width:200,paddingLeft:26,fontSize:12}}/>
               </div>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:11,color:"#9ca3af",whiteSpace:"nowrap" as const}}>From</span>
+                <input type="date" value={orderDateFrom} onChange={e=>setOrderDateFrom(e.target.value)} style={{...s.input,width:140,fontSize:12,padding:"6px 8px"}}/>
+                <span style={{fontSize:11,color:"#9ca3af",whiteSpace:"nowrap" as const}}>To</span>
+                <input type="date" value={orderDateTo} onChange={e=>setOrderDateTo(e.target.value)} style={{...s.input,width:140,fontSize:12,padding:"6px 8px"}}/>
+                {(orderDateFrom||orderDateTo)&&<button onClick={()=>{setOrderDateFrom("");setOrderDateTo("");}} style={{fontSize:11,background:"none",border:"none",cursor:"pointer",color:"#6366f1",padding:"2px 4px"}}>✕ Clear</button>}
+              </div>
               <button onClick={fetchHospitalOrders} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:4}}><Icon d={icons.refresh} size={13}/></button>
               <button onClick={()=>setShowOrderModal(true)} style={{...s.btn("purple"),display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}><Icon d={icons.plus} size={13} color="#fff"/> Create Order</button>
             </div>
             {hospitalOrders.length===0?<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><div style={{fontSize:14,fontWeight:600}}>No orders yet</div><div style={{fontSize:12,marginTop:4}}>Click "Create Order" to place your first order</div></div>:(
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>{["Order #","Ordered By","Supplier","Items","Total","Order Date","Expected","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {hospitalOrders.filter((o:any)=>(orderStatusFilter==="ALL"||o.status===orderStatusFilter)&&(!orderSearch||(o.order_number||'').toLowerCase().includes(orderSearch.toLowerCase())||(o.supplier_name||'').toLowerCase().includes(orderSearch.toLowerCase())||(o.ordered_by||'').toLowerCase().includes(orderSearch.toLowerCase()))).map((order:any)=>{
-                      const sc=statusColors[order.status]??{bg:"#f3f4f6",color:"#374151"};
-                      return(
-                        <tr key={order.id}>
-                          <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6366f1",fontWeight:600}}>{order.order_number}</td>
-                          <td style={{...s.td,fontWeight:600}}>{order.ordered_by}</td>
-                          <td style={s.td}>{order.supplier_name??"—"}</td>
-                          <td style={{...s.td,fontWeight:600}}>{order.item_count??0} items</td>
-                          <td style={{...s.td,color:"#16a34a",fontWeight:600}}>{order.total_amount?`$${parseFloat(order.total_amount).toFixed(2)}`:"—"}</td>
-                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{order.order_date?new Date(order.order_date).toLocaleDateString():"—"}</td>
-                          <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{order.expected_date?new Date(order.expected_date).toLocaleDateString():"—"}</td>
-                          <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{order.status==="PARTIALLY_DELIVERED"?"PARTIAL":order.status}</span></td>
-                          <td style={s.td}>
-                            <div style={{display:"flex",gap:4}}>
-                              <button onClick={async()=>{const r=await fetch(`/api/hospital/orders/${order.id}`);const d=await r.json();setViewOrderDetail(d);setViewOrderId(order.id);}} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="View Details"><Icon d={icons.eye} size={12} color="#2563eb"/></button>
-
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              (()=>{
+                const filtered=hospitalOrders.filter((o:any)=>{
+                  const matchStatus=orderStatusFilter==="ALL"||o.status===orderStatusFilter;
+                  const q=orderSearch.toLowerCase();
+                  const matchSearch=!q||(o.order_number||'').toLowerCase().includes(q)||(o.supplier_name||'').toLowerCase().includes(q)||(o.ordered_by||'').toLowerCase().includes(q);
+                  const od=o.order_date?new Date(o.order_date):null;
+                  const matchFrom=!orderDateFrom||!!(od&&od>=new Date(orderDateFrom));
+                  const matchTo=!orderDateTo||!!(od&&od<=new Date(orderDateTo+"T23:59:59"));
+                  return matchStatus&&matchSearch&&matchFrom&&matchTo;
+                });
+                const paged=filtered.slice((orderPage-1)*PG,orderPage*PG);
+                return(
+                  <>
+                    <div style={{overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse"}}>
+                        <thead><tr>{["Order #","Ordered By","Supplier","Items","Total","Order Date","Expected","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                        <tbody>
+                          {paged.map((order:any)=>{
+                            const sc=statusColors[order.status]??{bg:"#f3f4f6",color:"#374151"};
+                            return(
+                              <tr key={order.id}>
+                                <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6366f1",fontWeight:600}}>{order.order_number}</td>
+                                <td style={{...s.td,fontWeight:600}}>{order.ordered_by}</td>
+                                <td style={s.td}>{order.supplier_name??"—"}</td>
+                                <td style={{...s.td,fontWeight:600}}>{order.item_count??0} items</td>
+                                <td style={{...s.td,color:"#16a34a",fontWeight:600}}>{order.total_amount?`$${parseFloat(order.total_amount).toFixed(2)}`:"—"}</td>
+                                <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{order.order_date?new Date(order.order_date).toLocaleDateString():"—"}</td>
+                                <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{order.expected_date?new Date(order.expected_date).toLocaleDateString():"—"}</td>
+                                <td style={s.td}>
+                                  <div style={{display:"flex",flexDirection:"column" as const,gap:3,alignItems:"flex-start"}}>
+                                    <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{order.status==="PARTIALLY_DELIVERED"?"PARTIAL":order.status}</span>
+                                    {order.is_edited&&<span style={{fontSize:10,fontWeight:600,padding:"2px 6px",borderRadius:10,background:"#ede9fe",color:"#5b21b6"}}>EDITED</span>}
+                                  </div>
+                                </td>
+                                <td style={s.td}>
+                                  <div style={{display:"flex",gap:4}}>
+                                    <button onClick={async()=>{const r=await fetch(`/api/hospital/orders/${order.id}`);const d=await r.json();setViewOrderDetail(d);setViewOrderId(order.id);}} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="View"><Icon d={icons.eye} size={12} color="#2563eb"/></button>
+                                    <button onClick={async()=>{const r=await fetch(`/api/hospital/orders/${order.id}`);const d=await r.json();setEditOrderData(d);}} style={{background:"#ede9fe",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="Edit"><Icon d={icons.edit} size={12} color="#5b21b6"/></button>
+                                    {(order.status==="PENDING"||order.status==="PARTIALLY_DELIVERED")&&<button onClick={()=>{setCancelOrderId(order.id);setCancelReason("");}} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="Cancel"><Icon d={icons.x} size={12} color="#dc2626"/></button>}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Pagination page={orderPage} total={filtered.length} onPage={setOrderPage}/>
+                  </>
+                );
+              })()
             )}
           </div>
-          </div>
-        )}
-
-        {/* ── PURCHASE NOTES TAB ───────────────────────────────────────── */}
-        {tab==="pn"&&(
-          <div>
-            <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:13,color:"#166534"}}>📄 Purchase Notes</div>
-                <div style={{fontSize:12,color:"#16a34a",marginTop:2}}>Create a purchase note to simulate what the supplier delivered. This is then compared against the original order in Goods Receipt.</div>
-              </div>
-              <button onClick={()=>setShowPurchaseNoteModal(true)} style={{...s.btn("green"),display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap" as const}}>+ New Purchase Note</button>
-            </div>
-            <div style={s.card}>
-              <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" as const}}>
-                <span style={{fontSize:13,fontWeight:600}}>Purchase Notes</span>
-                <div style={{display:"flex",gap:5}}>
-                  {["ALL","PENDING","PROCESSED"].map(st=>(
-                    <button key={st} onClick={()=>setPnStatusFilter(st)} style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${pnStatusFilter===st?"#6366f1":"#e5e7eb"}`,background:pnStatusFilter===st?"#6366f1":"#f9fafb",color:pnStatusFilter===st?"#fff":"#374151"}}>{st}</button>
-                  ))}
-                </div>
-                <button onClick={fetchPurchaseNotes} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:4}}><Icon d={icons.refresh} size={13}/></button>
-                <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{purchaseNotes.length} notes</span>
-              </div>
-              {purchaseNotes.length===0?(
-                <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>
-                  <div style={{fontSize:32,marginBottom:8}}>📄</div>
-                  <div style={{fontSize:14,fontWeight:600}}>No purchase notes yet</div>
-                  <div style={{fontSize:12,marginTop:4}}>Create a purchase note to simulate a supplier delivery, then process it in Goods Receipt</div>
-                </div>
-              ):(
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Note #","Order #","Supplier","Supplier Ref","Delivery Date","Items","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {purchaseNotes.filter((pn:any)=>pnStatusFilter==="ALL"||pn.status===pnStatusFilter).map((pn:any)=>{
-                        const stColors:Record<string,{bg:string,color:string}>={
-                          PENDING:{bg:"#fef3c7",color:"#92400e"},
-                          PROCESSED:{bg:"#d1fae5",color:"#065f46"},
-                        };
-                        const sc=stColors[pn.status]??{bg:"#f3f4f6",color:"#374151"};
-                        return(
-                          <tr key={pn.id}>
-                            <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#16a34a",fontWeight:600}}>{pn.note_number}</td>
-                            <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#9ca3af"}}>{pn.order_number??"—"}</td>
-                            <td style={{...s.td,fontWeight:600}}>{pn.supplier_name??"—"}</td>
-                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{pn.supplier_ref??"—"}</td>
-                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{pn.delivery_date?new Date(pn.delivery_date).toLocaleDateString():"—"}</td>
-                            <td style={{...s.td,fontWeight:600}}>{pn.item_count??0} items</td>
-                            <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{pn.status}</span></td>
-                            <td style={s.td}>
-                              <div style={{display:"flex",gap:4}}>
-                                <button onClick={async()=>{const r=await fetch(`/api/hospital/purchase-notes/${pn.id}`);const d=await r.json();setViewPNDetail(d);}} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="View"><Icon d={icons.eye} size={12} color="#2563eb"/></button>
-                                {pn.status==="PENDING"&&(
-                                  <button onClick={async()=>{const r=await fetch(`/api/hospital/purchase-notes/${pn.id}`);const d=await r.json();setPNForGR(d);setShowNewGRModal(true);setTab("gr");}} style={{...s.btn("blue"),padding:"4px 10px",fontSize:11}}>📥 Process in GR</button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
           </div>
         )}
 
         {/* ── GOODS RECEIPT TAB ─────────────────────────────────────────── */}
         {tab==="gr"&&(
           <div>
-            {/* New Receipt button + instructions */}
             <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontWeight:700,fontSize:13,color:"#1d4ed8"}}>📥 Goods Receipt</div>
                 <div style={{fontSize:12,color:"#3b82f6",marginTop:2}}>When a supplier delivers items, create a receipt here. Compare ordered vs delivered and update stock.</div>
               </div>
-              <button onClick={()=>setShowNewGRModal(true)} style={{...s.btn("blue"),display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap" as const}}>+ New Receipt</button>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setShowCorrectionModal(true)} style={{...s.btn("ghost"),border:"1px solid #d1d5db",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap" as const,color:"#374151"}}>🔧 Correction</button>
+                <button onClick={()=>setShowNewGRModal(true)} style={{...s.btn("blue"),display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap" as const}}>+ New Receipt</button>
+              </div>
             </div>
 
             <div style={s.card}>
@@ -2332,46 +2572,43 @@ export default function HospitalPage(){
                     <button key={st} onClick={()=>setGrStatusFilter(st)} style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${grStatusFilter===st?"#6366f1":"#e5e7eb"}`,background:grStatusFilter===st?"#6366f1":"#f9fafb",color:grStatusFilter===st?"#fff":"#374151"}}>{st}</button>
                   ))}
                 </div>
+                <input value={grSearch} onChange={e=>setGrSearch(e.target.value)}
+                  placeholder="Search order #, supplier..."
+                  style={{...s.input,width:200,marginLeft:"auto"}}/>
                 <button onClick={fetchGoodsReceipts} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:4}}><Icon d={icons.refresh} size={13}/></button>
-                <span style={{fontSize:12,color:"#9ca3af",marginLeft:"auto"}}>{goodsReceipts.length} receipts</span>
               </div>
-              {goodsReceipts.length===0?(
-                <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>
-                  <div style={{fontSize:32,marginBottom:8}}>📭</div>
-                  <div style={{fontSize:14,fontWeight:600}}>No receipts yet</div>
-                  <div style={{fontSize:12,marginTop:4}}>Click "+ New Receipt" when a supplier delivers items</div>
-                </div>
-              ):(
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse"}}>
-                    <thead><tr>{["Receipt #","Order #","Supplier","Received By","Date","Items","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {goodsReceipts.filter((g:any)=>grStatusFilter==="ALL"||g.status===grStatusFilter).map((gr:any)=>{
-                        const stColors:Record<string,{bg:string,color:string}>={
-                          COMPLETE:{bg:"#d1fae5",color:"#065f46"},
-                          PARTIAL:{bg:"#fef3c7",color:"#92400e"},
-                          PENDING:{bg:"#dbeafe",color:"#1d4ed8"},
-                        };
-                        const sc=stColors[gr.status]??{bg:"#f3f4f6",color:"#374151"};
-                        return(
-                          <tr key={gr.id}>
+              {(()=>{
+                const q=grSearch.toLowerCase();
+                const filtered=goodsReceipts.filter((g:any)=>(grStatusFilter==="ALL"||g.status===grStatusFilter)&&(!q||(g.receipt_number||"").toLowerCase().includes(q)||(g.order_number||"").toLowerCase().includes(q)||(g.supplier_name||"").toLowerCase().includes(q)||(g.received_by||"").toLowerCase().includes(q)));
+                if(goodsReceipts.length===0)return(<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}><div style={{fontSize:32,marginBottom:8}}>📭</div><div style={{fontSize:14,fontWeight:600}}>No receipts yet</div><div style={{fontSize:12,marginTop:4}}>Click "+ New Receipt" when a supplier delivers items</div></div>);
+                if(filtered.length===0)return<div style={{padding:20,textAlign:"center",color:"#9ca3af"}}>No receipts match "{grSearch}"</div>;
+                const paged=filtered.slice((grPage-1)*PG,grPage*PG);
+                const stColors:Record<string,{bg:string,color:string}>={COMPLETE:{bg:"#d1fae5",color:"#065f46"},PARTIAL:{bg:"#fef3c7",color:"#92400e"},PENDING:{bg:"#dbeafe",color:"#1d4ed8"}};
+                return(<>
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr>{["Receipt #","Reg. Number","Order #","Supplier","Received By","Date","Items","Status","Actions"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {paged.map((gr:any)=>{
+                          const sc=stColors[gr.status]??{bg:"#f3f4f6",color:"#374151"};
+                          return(<tr key={gr.id}>
                             <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#6366f1",fontWeight:600}}>{gr.receipt_number}</td>
+                            <td style={{...s.td,fontSize:11,color:"#374151"}}>{gr.delivery_note_number??"—"}</td>
                             <td style={{...s.td,fontFamily:"monospace",fontSize:11,color:"#9ca3af"}}>{gr.order_number??"—"}</td>
                             <td style={{...s.td,fontWeight:600}}>{gr.supplier_name??"—"}</td>
                             <td style={s.td}>{gr.received_by}</td>
                             <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{gr.receipt_date?new Date(gr.receipt_date).toLocaleDateString():"—"}</td>
                             <td style={{...s.td,fontWeight:600}}>{gr.item_count??0} items</td>
                             <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{gr.status}</span></td>
-                            <td style={s.td}>
-                              <button onClick={async()=>{const r=await fetch(`/api/hospital/goods-receipt/${gr.id}`);const d=await r.json();setViewGRDetail(d);setViewGRId(gr.id);}} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="View Details"><Icon d={icons.eye} size={12} color="#2563eb"/></button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                            <td style={s.td}><button onClick={async()=>{const r=await fetch(`/api/hospital/goods-receipt/${gr.id}`);const d=await r.json();setViewGRDetail(d);setViewGRId(gr.id);}} style={{background:"#eff6ff",border:"none",borderRadius:6,padding:"5px 8px",cursor:"pointer"}} title="View Details"><Icon d={icons.eye} size={12} color="#2563eb"/></button></td>
+                          </tr>);
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination page={grPage} total={filtered.length} onPage={setGrPage}/>
+                </>);
+              })()}
             </div>
           </div>
         )}
@@ -2467,7 +2704,171 @@ export default function HospitalPage(){
             </div>
           </div>
         )}
+
+        {/* ── DISPENSE TAB ──────────────────────────────────────────────── */}
+        {tab==="dispense"&&(
+          <div>
+            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:13,color:"#15803d"}}>💊 Dispense Items</div>
+                <div style={{fontSize:12,color:"#16a34a",marginTop:2}}>Dispense stock from the central store or a department. No patient info required — just a reason.</div>
+              </div>
+              <button onClick={()=>{setDispenseItems([]);setDispenseBy("");setDispenseNotes("");setDispenseItemQ("");setDispenseErr("");setShowDispenseModal(true);}} style={{...s.btn("green"),display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap" as const}}>+ New Dispense</button>
+            </div>
+
+            <div style={s.card}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" as const}}>
+                <span style={{fontSize:13,fontWeight:600}}>Dispense Log</span>
+                <input style={{...s.input,width:180,marginLeft:"auto"}} placeholder="Search item..." value={dispenseSearch} onChange={e=>{setDispenseSearch(e.target.value);setDispensePage(1);}}/>
+                <input type="date" value={dispenseDateFrom} onChange={e=>{setDispenseDateFrom(e.target.value);setDispensePage(1);}} style={{...s.input,width:136,fontSize:12,padding:"5px 8px"}} title="From date"/>
+                <input type="date" value={dispenseDateTo} onChange={e=>{setDispenseDateTo(e.target.value);setDispensePage(1);}} style={{...s.input,width:136,fontSize:12,padding:"5px 8px"}} title="To date"/>
+                {(dispenseDateFrom||dispenseDateTo)&&<button onClick={()=>{setDispenseDateFrom("");setDispenseDateTo("");setDispensePage(1);}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",fontSize:11,padding:"4px 8px"}}>✕ Clear</button>}
+                <button onClick={fetchDispenses} style={{...s.btn("ghost"),border:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:4}}><Icon d={icons.refresh} size={13}/></button>
+              </div>
+              {(()=>{
+                if(dispenses.length===0)return<div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>No dispenses yet.</div>;
+                const dq=dispenseSearch.toLowerCase();
+                const filtered=dispenses.filter(d=>{
+                  if(dq&&!(d.item_name||"").toLowerCase().includes(dq))return false;
+                  if(dispenseDateFrom&&d.createdat&&new Date(d.createdat)<new Date(dispenseDateFrom))return false;
+                  if(dispenseDateTo&&d.createdat&&new Date(d.createdat)>new Date(dispenseDateTo+"T23:59:59"))return false;
+                  return true;
+                });
+                if(filtered.length===0)return<div style={{padding:20,textAlign:"center",color:"#9ca3af"}}>No results match your filters.</div>;
+                const paged=filtered.slice((dispensePage-1)*PG,dispensePage*PG);
+                return(<>
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse"}}>
+                      <thead><tr>{["Item","Qty","Reason","Dispensed By","Date"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {paged.map((d:any,i:number)=>(
+                          <tr key={i} onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")} onMouseLeave={e=>(e.currentTarget.style.background="")}>
+                            <td style={{...s.td,fontWeight:600}}>{d.item_name??"—"}</td>
+                            <td style={{...s.td,fontWeight:700,color:"#dc2626"}}>-{d.quantity}</td>
+                            <td style={{...s.td,fontSize:12,color:"#6b7280",maxWidth:220}}>{d.reason??"—"}</td>
+                            <td style={s.td}>{d.dispensed_by??"—"}</td>
+                            <td style={{...s.td,fontSize:12,color:"#6b7280"}}>{d.createdat?new Date(d.createdat).toLocaleDateString():"—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination page={dispensePage} total={filtered.length} onPage={setDispensePage}/>
+                </>);
+              })()}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Dispense Modal */}
+      {showDispenseModal&&(
+        <div style={s.overlay} onClick={()=>setShowDispenseModal(false)}>
+          <div style={{...s.modal,width:720,maxHeight:"92vh"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"16px 20px",borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:15,fontWeight:700}}>💊 Dispense — Central Store</span>
+              <button onClick={()=>setShowDispenseModal(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#6b7280"}}>✕</button>
+            </div>
+            <div style={{padding:20}}>
+              {/* Item search */}
+              <div style={{marginBottom:12}}>
+                <label style={s.label}>Add Items</label>
+                <div style={{position:"relative"}}>
+                  <input style={s.input} value={dispenseItemQ} onChange={e=>setDispenseItemQ(e.target.value)} placeholder="Search central store stock..."/>
+                  {dispenseItemQ.trim()&&(()=>{
+                    const sq=dispenseItemQ.toLowerCase();
+                    const CENTRAL_ID="00000000-0000-0000-0000-000000000000";
+                    const results=items
+                      .filter((item:any)=>item.name?.toLowerCase().includes(sq))
+                      .map((item:any)=>{
+                        const centralRow=stock.find((st:any)=>st.id===item.id&&st.department_id===CENTRAL_ID);
+                        const centralAvail=centralRow?Math.max(0,parseInt(centralRow.quantity||0)-parseInt(centralRow.reserved_quantity||0)):0;
+                        if(centralAvail>0)return{...item,available:centralAvail,stock_id:centralRow.stock_id,sourceDeptId:CENTRAL_ID};
+                        const anyRow=stock.find((st:any)=>st.id===item.id&&Math.max(0,parseInt(st.quantity||0)-parseInt(st.reserved_quantity||0))>0);
+                        if(!anyRow)return{...item,available:0,stock_id:null,sourceDeptId:CENTRAL_ID};
+                        const avail=Math.max(0,parseInt(anyRow.quantity||0)-parseInt(anyRow.reserved_quantity||0));
+                        return{...item,available:avail,stock_id:anyRow.stock_id,sourceDeptId:anyRow.department_id};
+                      })
+                      .filter((item:any)=>item.available>0)
+                      .slice(0,8);
+                    if(!results.length)return null;
+                    return(
+                      <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #6366f1",borderRadius:8,zIndex:100,maxHeight:220,overflowY:"auto" as const,boxShadow:"0 4px 16px rgba(0,0,0,0.1)"}}>
+                        {results.map((item:any)=>{
+                          const added=dispenseItems.some(d=>d.itemId===item.id);
+                          return(
+                            <div key={item.stock_id||item.id} onClick={()=>{
+                              if(added)return;
+                              setDispenseItems(prev=>[...prev,{itemId:item.id,itemName:item.name,uom:item.uom||"",available:item.available,quantity:"1",reason:"",sourceDeptId:item.sourceDeptId}]);
+                              setDispenseItemQ("");
+                            }} style={{padding:"10px 14px",cursor:added?"default":"pointer",borderBottom:"1px solid #f9fafb",display:"flex",justifyContent:"space-between",alignItems:"center",opacity:added?0.5:1}} onMouseEnter={e=>{if(!added)e.currentTarget.style.background="#f9fafb";}} onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
+                              <div><div style={{fontWeight:600,fontSize:13}}>{item.name}</div><div style={{fontSize:11,color:"#6b7280"}}>Available: <strong style={{color:item.available===0?"#dc2626":"#16a34a"}}>{item.available}</strong> {item.uom}</div></div>
+                              {added?<span style={{fontSize:11,color:"#9ca3af"}}>Added</span>:<span style={{fontSize:11,color:"#6366f1",fontWeight:600}}>+ Add</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Items table */}
+              {dispenseItems.length>0?(
+                <div style={{border:"1px solid #e5e7eb",borderRadius:8,overflow:"hidden",marginBottom:16}}>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr>{["Item","Available","Qty","Reason",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",background:"#f9fafb",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {dispenseItems.map((di,idx)=>(
+                        <tr key={di.itemId}>
+                          <td style={{padding:"8px 10px",fontWeight:600,fontSize:13,whiteSpace:"nowrap"}}>{di.itemName}</td>
+                          <td style={{padding:"8px 10px",fontSize:12,color:di.available===0?"#dc2626":"#16a34a",fontWeight:600,whiteSpace:"nowrap"}}>{di.available} {di.uom}</td>
+                          <td style={{padding:"8px 10px"}}>
+                            <input type="text" inputMode="numeric" value={di.quantity} onChange={e=>setDispenseItems(prev=>prev.map((d,i)=>i===idx?{...d,quantity:e.target.value.replace(/[^0-9]/g,"")}:d))} style={{width:64,padding:"5px 8px",borderRadius:7,border:"1px solid #d1d5db",fontSize:13,textAlign:"center"}}/>
+                          </td>
+                          <td style={{padding:"8px 10px"}}>
+                            <input value={di.reason} onChange={e=>setDispenseItems(prev=>prev.map((d,i)=>i===idx?{...d,reason:e.target.value}:d))} placeholder="Reason *" style={{width:"100%",padding:"5px 8px",borderRadius:7,border:`1px solid ${di.reason?"#d1d5db":"#fca5a5"}`,fontSize:13,boxSizing:"border-box" as const}}/>
+                          </td>
+                          <td style={{padding:"8px 10px"}}><button onClick={()=>setDispenseItems(prev=>prev.filter((_,i)=>i!==idx))} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ):<div style={{textAlign:"center",padding:"20px 0",color:"#9ca3af",fontSize:13,marginBottom:12}}>Search above to add items</div>}
+
+              {/* Shared fields */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Dispensed By *</label><input style={s.input} value={dispenseBy} onChange={e=>setDispenseBy(e.target.value)} placeholder="Your name"/></div>
+                <div style={s.fgroup}><label style={s.label}>Notes</label><input style={s.input} value={dispenseNotes} onChange={e=>setDispenseNotes(e.target.value)} placeholder="Optional"/></div>
+              </div>
+
+              {dispenseErr&&<div style={{padding:"10px 14px",background:"#fee2e2",color:"#991b1b",borderRadius:8,fontSize:13,marginTop:4}}>{dispenseErr}</div>}
+            </div>
+            <div style={{padding:"12px 20px",borderTop:"1px solid #e5e7eb",display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}} onClick={()=>setShowDispenseModal(false)}>Cancel</button>
+              <button disabled={dispenseSaving||!dispenseItems.length} style={{...s.btn("green"),opacity:(dispenseSaving||!dispenseItems.length)?0.6:1}} onClick={async()=>{
+                setDispenseErr("");
+                if(!dispenseBy.trim()){setDispenseErr("Dispensed By is required");return;}
+                for(const di of dispenseItems){
+                  if(!di.reason.trim()){setDispenseErr(`Reason required for ${di.itemName}`);return;}
+                  if(!parseInt(di.quantity)||parseInt(di.quantity)<1){setDispenseErr(`Invalid quantity for ${di.itemName}`);return;}
+                }
+                setDispenseSaving(true);
+                const errors:string[]=[];
+                for(const di of dispenseItems){
+                  const res=await fetch("/api/hospital/dispenses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({itemId:di.itemId,quantity:parseInt(di.quantity),reason:di.reason,dispensedBy:dispenseBy,notes:dispenseNotes||null,departmentId:di.sourceDeptId})});
+                  if(!res.ok){const e=await res.json();errors.push(`${di.itemName}: ${e.error??"failed"}`);}
+                }
+                setDispenseSaving(false);
+                if(errors.length){setDispenseErr(errors[0]);return;}
+                setShowDispenseModal(false);fetchDispenses();fetchStock();
+                showToast(`${dispenseItems.length} item${dispenseItems.length>1?"s":""} dispensed!`);
+              }}>{dispenseSaving?"Saving…":`✓ Dispense${dispenseItems.length>0?` (${dispenseItems.length})`:""}` }</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Wastage Modal */}
       {showWastageModal&&(
@@ -2499,13 +2900,6 @@ export default function HospitalPage(){
                 <input type="number" min="1" style={s.input} value={wastageForm.quantity} onChange={e=>setWastageForm(f=>({...f,quantity:e.target.value}))} placeholder="0"/>
               </div>
               <div style={s.fgroup}>
-                <label style={s.label}>Department</label>
-                <select style={s.input} value={wastageForm.departmentId} onChange={e=>setWastageForm(f=>({...f,departmentId:e.target.value}))}>
-                  <option value="">Hospital Central Store</option>
-                  {departments.map((d:any)=><option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </div>
-              <div style={s.fgroup}>
                 <label style={s.label}>Batch Number</label>
                 <input style={s.input} value={wastageForm.batchNumber} onChange={e=>setWastageForm(f=>({...f,batchNumber:e.target.value}))} placeholder="Optional"/>
               </div>
@@ -2521,6 +2915,7 @@ export default function HospitalPage(){
                 <label style={s.label}>Notes</label>
                 <input style={s.input} value={wastageForm.notes} onChange={e=>setWastageForm(f=>({...f,notes:e.target.value}))} placeholder="Optional"/>
               </div>
+
             </div>
             <div style={{padding:"12px 20px",borderTop:"1px solid #e5e7eb",display:"flex",gap:8,justifyContent:"flex-end"}}>
               <button style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}} onClick={()=>setShowWastageModal(false)}>Cancel</button>
@@ -2547,8 +2942,8 @@ export default function HospitalPage(){
           onSuccess={()=>{setOrderCart([]);fetchHospitalOrders();setTab("orders");showToast("Order created!");}}
         />
       )}
-      {showPurchaseNoteModal&&<CreatePurchaseNoteModal orders={hospitalOrders} tibbnaSuppliers={tibbnaSuppliers} onClose={()=>setShowPurchaseNoteModal(false)} onSuccess={()=>{fetchPurchaseNotes();showToast("Purchase note created! Go to Goods Receipt to process it.");}}/> }
-      {showNewGRModal&&<NewGoodsReceiptModal orders={hospitalOrders} departments={departments} tibbnaSuppliers={tibbnaSuppliers} purchaseNote={pNForGR} onClose={()=>{setShowNewGRModal(false);setPNForGR(null);}} onSuccess={(msg)=>{fetchGoodsReceipts();fetchHospitalOrders();fetchStock();fetchPurchaseNotes();showToast(msg);setShowNewGRModal(false);setPNForGR(null);}}/> }
+      {showNewGRModal&&<NewGoodsReceiptModal orders={hospitalOrders} departments={departments} tibbnaSuppliers={tibbnaSuppliers} onClose={()=>setShowNewGRModal(false)} onSuccess={(msg)=>{fetchGoodsReceipts();fetchHospitalOrders();fetchStock();showToast(msg);setShowNewGRModal(false);}}/> }
+      {showCorrectionModal&&<CorrectionModal onClose={()=>setShowCorrectionModal(false)} onSuccess={(msg)=>{fetchGoodsReceipts();fetchStock();showToast(msg);setShowCorrectionModal(false);}}/>}
       {showGRModal&&viewOrderDetail&&(
         <ReceiveOrderModal
           orderDetail={viewOrderDetail}
@@ -2562,14 +2957,67 @@ export default function HospitalPage(){
           }}
         />
       )}
+      {editOrderData&&<EditOrderModal detail={editOrderData} suppliers={tibbnaSuppliers} onClose={()=>setEditOrderData(null)} onSuccess={()=>{setEditOrderData(null);fetchHospitalOrders();showToast("Order updated! Inventory prices synced.");}}/>}
+
+      {cancelOrderId&&(
+        <div style={s.overlay}>
+          <div style={{background:"#fff",borderRadius:12,padding:28,width:440,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
+            <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>Cancel Order</div>
+            <div style={{fontSize:12,color:"#6b7280",marginBottom:16}}>Please provide a reason for cancelling this order.</div>
+            <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Reason *</label>
+              <textarea value={cancelReason} onChange={e=>setCancelReason(e.target.value)} rows={3}
+                style={{...s.input,resize:"vertical" as const,fontFamily:"inherit"}} placeholder="e.g. Supplier unavailable, duplicate order..."/>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+              <button onClick={()=>{setCancelOrderId(null);setCancelReason("");}} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Back</button>
+              <button disabled={cancelSaving||!cancelReason.trim()} onClick={async()=>{
+                setCancelSaving(true);
+                await fetch(`/api/hospital/orders/${cancelOrderId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"CANCELLED",reason:cancelReason})});
+                setCancelSaving(false);setCancelOrderId(null);setCancelReason("");
+                fetchHospitalOrders();showToast("Order cancelled.");
+              }} style={{...s.btn("red"),opacity:cancelSaving||!cancelReason.trim()?0.5:1}}>{cancelSaving?"Cancelling...":"✕ Confirm Cancel"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {viewOrderId&&viewOrderDetail&&!showGRModal&&(
-        <ViewOrderModal detail={viewOrderDetail} onClose={()=>{setViewOrderId(null);setViewOrderDetail(null);}} onReceive={()=>{setShowGRModal(true);}}/>
+        <ViewOrderModal detail={viewOrderDetail} onClose={()=>{setViewOrderId(null);setViewOrderDetail(null);}} onReceive={()=>{setShowGRModal(true);}} onEdit={()=>{setEditOrderData(viewOrderDetail);setViewOrderId(null);setViewOrderDetail(null);}}/>
       )}
       {viewGRId&&viewGRDetail&&(
         <ViewGRModal detail={viewGRDetail} suppliers={tibbnaSuppliers} onClose={()=>{setViewGRId(null);setViewGRDetail(null);}}/>
       )}
             {showAddItem&&<AddItemWizard onClose={()=>setShowAddItem(false)} onSuccess={()=>{fetchItems();showToast("Item added!");}} departments={departments} storageLocations={storageLocations} manufacturers={manufacturers} suppliers={tibbnaSuppliers}/>}
       {showTransfer&&<TransferModal items={items} departments={departments} onClose={()=>setShowTransfer(false)} onSuccess={()=>{fetchTransfers();showToast("Transfer created!");}}/>}
+
+      {confirmTrf&&(
+        <div style={s.overlay}>
+          <div style={{...s.modal,width:440}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700}}>✓ Confirm Receipt</div>
+                <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>{confirmTrf.transfer_number} → {confirmTrf.department_name}</div>
+              </div>
+              <button onClick={()=>setConfirmTrf(null)} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
+            </div>
+            {confirmErr&&<div style={{background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:12}}>{confirmErr}</div>}
+            <div style={{background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#6b7280",marginBottom:16}}>
+              The department must provide the delivery key from the printed transfer slip to confirm receipt.
+            </div>
+            <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Delivery Key *</label><input style={{...s.input,fontFamily:"monospace",letterSpacing:"0.15em",fontSize:16,fontWeight:700}} value={confirmKey} onChange={e=>setConfirmKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} placeholder="Enter key from printed slip" maxLength={8}/></div>
+            <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Received By *</label><input style={s.input} value={confirmReceiver} onChange={e=>setConfirmReceiver(e.target.value)} placeholder="Name of person receiving"/></div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+              <button onClick={()=>setConfirmTrf(null)} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
+              <button onClick={async()=>{
+                if(!confirmKey.trim()||!confirmReceiver.trim()){setConfirmErr("Delivery key and receiver name are required");return;}
+                const res=await fetch(`/api/hospital/transfers/${confirmTrf.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"RECEIVED",receivedBy:confirmReceiver,deliveryKey:confirmKey})});
+                const d=await res.json();
+                if(!res.ok){setConfirmErr(d.error||"Failed");return;}
+                setConfirmTrf(null);fetchTransfers();fetchStock();showToast("Receipt confirmed! Stock updated.");
+              }} style={s.btn("green")}>✓ Confirm Receipt</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast&&<div style={{position:"fixed",bottom:24,right:24,background:"#16a34a",color:"#fff",padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,zIndex:2000}}>✓ {toast}</div>}
     </div>

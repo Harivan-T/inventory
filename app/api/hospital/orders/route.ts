@@ -56,6 +56,13 @@ export async function POST(req: NextRequest) {
          item.orderedQty||0, item.unitCost||null,
          (item.orderedQty||0)*(item.unitCost||0), item.notes||null]
       );
+      // Sync price back to inventory
+      if (item.itemId && item.unitCost) {
+        await pool.query(
+          `UPDATE hospital_items SET unit_cost=$1, updatedat=NOW() WHERE id=$2`,
+          [parseFloat(item.unitCost), item.itemId]
+        ).catch(() => {});
+      }
     }
 
     return NextResponse.json(r.rows[0]);
