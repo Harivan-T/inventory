@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const { status, receivedBy, sentBy, items } = await req.json();
+    const { status, receivedBy, sentBy, items, deliveryKey } = await req.json();
 
     // Update transfer item quantities if admin adjusted them
     if (items?.length) {
@@ -38,11 +38,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    // Department confirms receipt — add stock and log history
+    // Department confirms receipt — validate key, add stock, log history
     if (status === "RECEIVED") {
       const transfer = await pool.query(`SELECT * FROM hospital_transfers WHERE id=$1`, [id]);
       const t = transfer.rows[0];
       if (!t) return NextResponse.json({ error: "Transfer not found" }, { status: 404 });
+
+      // Validate delivery key
+      if (t.delivery_key && deliveryKey && t.delivery_key !== deliveryKey.toUpperCase()) {
+        return NextResponse.json({ error: "Invalid delivery key" }, { status: 400 });
+      }
 
       const tItems = await pool.query(`SELECT * FROM hospital_transfer_items WHERE transfer_id=$1`, [id]);
       for (const item of tItems.rows) {
@@ -65,10 +70,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     await pool.query(
       `UPDATE hospital_transfers SET
-         status     = COALESCE($1, status),
+         status      = COALESCE($1, status),
          received_by = COALESCE($2, received_by),
-         sent_by    = COALESCE($3, sent_by),
-         updatedat  = NOW()
+         sent_by     = COALESCE($3, sent_by),
+         updatedat   = NOW()
        WHERE id=$4`,
       [status||null, receivedBy||null, sentBy||null, id]
     );

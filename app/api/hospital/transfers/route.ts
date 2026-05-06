@@ -24,12 +24,16 @@ export async function POST(req: NextRequest) {
   const { toDepartmentId, sentBy, notes, items, isRequest } = await req.json();
   if (!toDepartmentId || !items?.length) return NextResponse.json({ error: "Department and items required" }, { status: 400 });
 
+  await pool.query(`ALTER TABLE hospital_transfers ADD COLUMN IF NOT EXISTS delivery_key VARCHAR(8)`).catch(()=>{});
+
   const tNum = `TRF-${Date.now().toString().slice(-8)}`;
   const transferStatus = isRequest ? 'REQUESTED' : 'PENDING';
+  const deliveryKey = Math.random().toString(36).substring(2, 8).toUpperCase();
+
   const r = await pool.query(
-    `INSERT INTO hospital_transfers (id, workspace_id, transfer_number, to_department_id, sent_by, status, notes, createdat, updatedat)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING *`,
-    [WS, tNum, toDepartmentId, sentBy || null, transferStatus, notes || null]
+    `INSERT INTO hospital_transfers (id, workspace_id, transfer_number, to_department_id, sent_by, status, notes, delivery_key, createdat, updatedat)
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING *`,
+    [WS, tNum, toDepartmentId, sentBy || null, transferStatus, notes || null, deliveryKey]
   );
   const transferId = r.rows[0].id;
 

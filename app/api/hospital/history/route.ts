@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const deptId  = req.nextUrl.searchParams.get("department_id") ?? "";
   const type    = req.nextUrl.searchParams.get("type") ?? "";
   const page    = parseInt(req.nextUrl.searchParams.get("page") ?? "1");
-  const limit   = 20;
+  const limit   = 15;
   const offset  = (page - 1) * limit;
 
   try {
