@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
   try {
     // If order_id provided, return full PN + items for that order's latest PN
     if (orderId) {
-      await pool.query(`ALTER TABLE hospital_purchase_note_items ADD COLUMN IF NOT EXISTS delivered_total NUMERIC(12,2)`).catch(()=>{});
+      await pool.query(`ALTER TABLE hospital_purchase_note_items ADD COLUMN IF NOT EXISTS delivered_total INTEGER`).catch(()=>{});
+      await pool.query(`ALTER TABLE hospital_purchase_note_items ADD COLUMN IF NOT EXISTS claim_damage INTEGER`).catch(()=>{});
       const pn = await pool.query(
         `SELECT * FROM hospital_purchase_notes WHERE workspace_id=$1 AND order_id=$2 ORDER BY createdat DESC LIMIT 1`,
         [WS, orderId]
@@ -55,17 +56,16 @@ export async function POST(req: NextRequest) {
     );
 
     const noteId = r.rows[0].id;
+    await pool.query(`ALTER TABLE hospital_purchase_note_items ADD COLUMN IF NOT EXISTS delivered_total INTEGER`).catch(()=>{});
+    await pool.query(`ALTER TABLE hospital_purchase_note_items ADD COLUMN IF NOT EXISTS claim_damage INTEGER`).catch(()=>{});
     for (const item of items) {
-      // Add delivered_total column if not exists
-      await pool.query(`ALTER TABLE hospital_purchase_note_items ADD COLUMN IF NOT EXISTS delivered_total NUMERIC(12,2)`).catch(()=>{});
-
       await pool.query(
         `INSERT INTO hospital_purchase_note_items
-           (id, note_id, item_id, item_name, uom, ordered_qty, delivered_qty, delivered_total, notes, createdat)
-         VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
+           (id, note_id, item_id, item_name, uom, ordered_qty, delivered_qty, delivered_total, claim_damage, notes, createdat)
+         VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())`,
         [noteId, item.itemId||null, item.itemName, item.uom||null,
          item.orderedQty||0, item.deliveredQty||0,
-         item.deliveredTotal||null, item.notes||null]
+         item.deliveredTotal||null, item.claimDamage||null, item.notes||null]
       );
     }
 

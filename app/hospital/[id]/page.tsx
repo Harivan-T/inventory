@@ -178,7 +178,7 @@ export default function DepartmentPage({params}:{params:Promise<{id:string}>}){
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState("");
   const [dispenseModal,setDispenseModal]=useState(false);
-  const [dispenseItem,setDispenseItem]=useState<any>(null);
+  const [dispenseItems,setDispenseItems]=useState<{itemId:string;itemName:string;uom:string;available:number;quantity:string;reason:string}[]>([]);
   const [dispenseSearch,setDispenseSearch]=useState("");
   const [dispenseSearchResults,setDispenseSearchResults]=useState<any[]>([]);
   const [showRequestModal,setShowRequestModal]=useState(false);
@@ -187,7 +187,7 @@ export default function DepartmentPage({params}:{params:Promise<{id:string}>}){
   const [editItem,setEditItem]=useState<any>(null);
   const [editForm,setEditForm]=useState({name:"",uom:"",unit_cost:"",reorder_level:""});
   const [dispenseForm,setDispenseForm]=useState({
-    quantity:"1",dispensedBy:"",patientName:"",patientRef:"",
+    dispensedBy:"",
     bedNumber:"",wardNumber:"",doctorName:"",
     procedureType:"",contrastLot:"",contrastConcentration:"",contrastVolume:"",
     filmUsed:"",chemicalsUsed:"",accessories:"",
@@ -234,16 +234,28 @@ export default function DepartmentPage({params}:{params:Promise<{id:string}>}){
   const searchDispenseItems=async(q:string)=>{
     setDispenseSearch(q);
     if(!q.trim()){setDispenseSearchResults([]);return;}
-    try{const r=await fetch(`/api/hospital/stock?department_id=${id}`);const d=await r.json();setDispenseSearchResults((Array.isArray(d)?d:[]).filter((i:any)=>i.name.toLowerCase().includes(q.toLowerCase())).slice(0,8));}
+    try{const r=await fetch(`/api/hospital/stock?department_id=${id}`);const d=await r.json();setDispenseSearchResults((Array.isArray(d)?d:[]).filter((i:any)=>i.name.toLowerCase().includes(q.toLowerCase())&&(parseInt(i.quantity||0)-parseInt(i.reserved_quantity||0))>0).slice(0,8));}
     catch(e){console.error(e);}
   };
 
   const handleDispense=async()=>{
-    if(!dispenseItem||!dispenseForm.dispensedBy.trim()){showToast("Select item and enter your name");return;}
-    const body={itemId:dispenseItem.id,departmentId:id,quantity:parseInt(dispenseForm.quantity)||1,dispensedBy:dispenseForm.dispensedBy,patientName:dispenseForm.patientName,patientRef:dispenseForm.patientRef,bedNumber:dispenseForm.bedNumber,wardNumber:dispenseForm.wardNumber,doctorName:dispenseForm.doctorName,procedureType:dispenseForm.procedureType,surgeonName:dispenseForm.surgeonName,anaesthetist:dispenseForm.anaesthetist,caseNumber:dispenseForm.caseNumber,contrastLot:dispenseForm.contrastLot,contrastConcentration:dispenseForm.contrastConcentration,contrastVolume:dispenseForm.contrastVolume,filmUsed:dispenseForm.filmUsed,chemicalsUsed:dispenseForm.chemicalsUsed,accessories:dispenseForm.accessories,notes:dispenseForm.notes};
-    const res=await fetch("/api/hospital/dispenses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(res.ok){showToast("Dispensed!");setDispenseModal(false);setDispenseItem(null);setDispenseSearch("");setDispenseForm({quantity:"1",dispensedBy:"",patientName:"",patientRef:"",bedNumber:"",wardNumber:"",doctorName:"",procedureType:"",contrastLot:"",contrastConcentration:"",contrastVolume:"",filmUsed:"",chemicalsUsed:"",accessories:"",surgeonName:"",anaesthetist:"",caseNumber:"",notes:""});fetchStock();}
-    else{const err=await res.json();showToast(err.error??"Dispense failed");}
+    if(!dispenseItems.length){showToast("Add at least one item");return;}
+    if(!dispenseForm.dispensedBy.trim()){showToast("Enter your name");return;}
+    for(const di of dispenseItems){
+      if(!di.reason.trim()){showToast(`Reason required for ${di.itemName}`);return;}
+      if(!parseInt(di.quantity)||parseInt(di.quantity)<1){showToast(`Invalid quantity for ${di.itemName}`);return;}
+    }
+    const shared={departmentId:id,dispensedBy:dispenseForm.dispensedBy,bedNumber:dispenseForm.bedNumber,wardNumber:dispenseForm.wardNumber,doctorName:dispenseForm.doctorName,procedureType:dispenseForm.procedureType,surgeonName:dispenseForm.surgeonName,anaesthetist:dispenseForm.anaesthetist,caseNumber:dispenseForm.caseNumber,contrastLot:dispenseForm.contrastLot,contrastConcentration:dispenseForm.contrastConcentration,contrastVolume:dispenseForm.contrastVolume,filmUsed:dispenseForm.filmUsed,chemicalsUsed:dispenseForm.chemicalsUsed,accessories:dispenseForm.accessories,notes:dispenseForm.notes};
+    const errors:string[]=[];
+    for(const di of dispenseItems){
+      const res=await fetch("/api/hospital/dispenses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...shared,itemId:di.itemId,quantity:parseInt(di.quantity),reason:di.reason})});
+      if(!res.ok){const e=await res.json();errors.push(`${di.itemName}: ${e.error??'failed'}`);}
+    }
+    if(errors.length){showToast(errors[0]);return;}
+    showToast(`${dispenseItems.length} item${dispenseItems.length>1?"s":""} dispensed!`);
+    setDispenseModal(false);setDispenseItems([]);setDispenseSearch("");
+    setDispenseForm({dispensedBy:"",bedNumber:"",wardNumber:"",doctorName:"",procedureType:"",contrastLot:"",contrastConcentration:"",contrastVolume:"",filmUsed:"",chemicalsUsed:"",accessories:"",surgeonName:"",anaesthetist:"",caseNumber:"",notes:""});
+    fetchStock();
   };
 
   const handleReceive=async(transferId:string)=>{
@@ -397,7 +409,7 @@ export default function DepartmentPage({params}:{params:Promise<{id:string}>}){
                             <td style={s.td}><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:sc.bg,color:sc.color}}>{sc.label}</span></td>
                             <td style={s.td}>
                               <div style={{display:"flex",gap:4}}>
-                                <button onClick={()=>{setDispenseItem(item);setDispenseModal(true);}} style={{...s.btn("purple"),padding:"4px 10px",fontSize:11}}>Dispense</button>
+                                <button onClick={()=>{const avail=parseInt(item.quantity||0)-parseInt(item.reserved_quantity||0);setDispenseItems([{itemId:item.id,itemName:item.name,uom:item.uom||"",available:avail,quantity:"1",reason:""}]);setDispenseModal(true);}} style={{...s.btn("purple"),padding:"4px 10px",fontSize:11}}>Dispense</button>
                                 <button onClick={()=>{setEditItem(item);setEditForm({name:item.name,uom:item.uom,unit_cost:item.unit_cost??"",reorder_level:item.reorder_level??"0"});}} style={{background:"#f0fdf4",border:"none",borderRadius:6,padding:"5px 7px",cursor:"pointer"}}><Icon d={icons.edit} size={12} color="#16a34a"/></button>
                                 {parseInt(item.quantity||0)===0&&<button onClick={()=>setShowRequestModal(true)} style={{...s.btn("orange"),padding:"4px 8px",fontSize:10}}>Request</button>}
                               </div>
@@ -572,39 +584,66 @@ export default function DepartmentPage({params}:{params:Promise<{id:string}>}){
 
       {/* Dispense Modal */}
       {dispenseModal&&(
-        <div style={s.overlay}><div style={{...s.modal}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={s.overlay}><div style={{...s.modal,width:720,maxHeight:"92vh"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <h3 style={{fontSize:16,fontWeight:600,margin:0}}>{dc.icon} Dispense — {dept?.name}</h3>
             <button onClick={()=>setDispenseModal(false)} style={{background:"none",border:"none",cursor:"pointer"}}><Icon d={icons.x} size={18} color="#6b7280"/></button>
           </div>
-          {!dispenseItem&&(
-            <div style={{marginBottom:16}}>
-              <label style={s.label}>Select Item *</label>
-              <div style={{position:"relative"}}>
-                <input style={s.input} value={dispenseSearch} onChange={e=>searchDispenseItems(e.target.value)} placeholder="Search department stock..."/>
-                {dispenseSearchResults.length>0&&(
-                  <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #6366f1",borderRadius:8,zIndex:100,maxHeight:200,overflowY:"auto" as const}}>
-                    {dispenseSearchResults.map(item=>(
-                      <div key={item.id} onClick={()=>{setDispenseItem(item);setDispenseSearch("");setDispenseSearchResults([]);}} style={{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f9fafb",display:"flex",justifyContent:"space-between"}} onMouseEnter={e=>(e.currentTarget.style.background="#f9fafb")} onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
-                        <div><div style={{fontWeight:600,fontSize:13}}>{item.name}</div><div style={{fontSize:11,color:"#6b7280"}}>Stock: <strong style={{color:parseInt(item.quantity||0)===0?"#dc2626":"#16a34a"}}>{item.quantity||0}</strong> {item.uom}</div></div>
+
+          {/* Item search */}
+          <div style={{marginBottom:12}}>
+            <label style={s.label}>Add Items</label>
+            <div style={{position:"relative"}}>
+              <input style={s.input} value={dispenseSearch} onChange={e=>searchDispenseItems(e.target.value)} placeholder="Search department stock to add items..."/>
+              {dispenseSearchResults.length>0&&(
+                <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #6366f1",borderRadius:8,zIndex:100,maxHeight:220,overflowY:"auto" as const,boxShadow:"0 4px 16px rgba(0,0,0,0.1)"}}>
+                  {dispenseSearchResults.map(item=>{
+                    const alreadyAdded=dispenseItems.some(d=>d.itemId===item.id);
+                    const avail=parseInt(item.quantity||0)-parseInt(item.reserved_quantity||0);
+                    return(
+                      <div key={item.id} onClick={()=>{
+                        if(alreadyAdded)return;
+                        setDispenseItems(prev=>[...prev,{itemId:item.id,itemName:item.name,uom:item.uom||"",available:avail,quantity:"1",reason:""}]);
+                        setDispenseSearch("");setDispenseSearchResults([]);
+                      }} style={{padding:"10px 14px",cursor:alreadyAdded?"default":"pointer",borderBottom:"1px solid #f9fafb",display:"flex",justifyContent:"space-between",alignItems:"center",opacity:alreadyAdded?0.5:1}} onMouseEnter={e=>{if(!alreadyAdded)e.currentTarget.style.background="#f9fafb";}} onMouseLeave={e=>(e.currentTarget.style.background="#fff")}>
+                        <div><div style={{fontWeight:600,fontSize:13}}>{item.name}</div><div style={{fontSize:11,color:"#6b7280"}}>Available: <strong style={{color:avail===0?"#dc2626":"#16a34a"}}>{avail}</strong> {item.uom}</div></div>
+                        {alreadyAdded?<span style={{fontSize:11,color:"#9ca3af"}}>Added</span>:<span style={{fontSize:11,color:"#6366f1",fontWeight:600}}>+ Add</span>}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Items list — per-item qty + reason */}
+          {dispenseItems.length>0&&(
+            <div style={{border:"1px solid #e5e7eb",borderRadius:8,overflow:"hidden",marginBottom:16}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>{["Item","Available","Qty","Reason",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:11,fontWeight:700,color:"#6b7280",textTransform:"uppercase",background:"#f9fafb",borderBottom:"1px solid #e5e7eb"}}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {dispenseItems.map((di,idx)=>(
+                    <tr key={di.itemId}>
+                      <td style={{padding:"8px 10px",fontWeight:600,fontSize:13,whiteSpace:"nowrap"}}>{di.itemName}</td>
+                      <td style={{padding:"8px 10px",fontSize:12,color:di.available===0?"#dc2626":"#16a34a",fontWeight:600,whiteSpace:"nowrap"}}>{di.available} {di.uom}</td>
+                      <td style={{padding:"8px 10px"}}>
+                        <input type="text" inputMode="numeric" value={di.quantity} onChange={e=>setDispenseItems(prev=>prev.map((d,i)=>i===idx?{...d,quantity:e.target.value.replace(/[^0-9]/g,"")||""}:d))} style={{width:64,padding:"5px 8px",borderRadius:7,border:"1px solid #d1d5db",fontSize:13,textAlign:"center"}}/>
+                      </td>
+                      <td style={{padding:"8px 10px"}}>
+                        <input value={di.reason} onChange={e=>setDispenseItems(prev=>prev.map((d,i)=>i===idx?{...d,reason:e.target.value}:d))} placeholder="Reason *" style={{width:"100%",padding:"5px 8px",borderRadius:7,border:`1px solid ${di.reason?"#d1d5db":"#fca5a5"}`,fontSize:13,boxSizing:"border-box" as const}}/>
+                      </td>
+                      <td style={{padding:"8px 10px"}}><button onClick={()=>setDispenseItems(prev=>prev.filter((_,i)=>i!==idx))} style={{background:"#fee2e2",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}><Icon d={icons.trash} size={12} color="#dc2626"/></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-          {dispenseItem&&(
-            <div style={{background:"#eef2ff",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontWeight:600,fontSize:13}}>{dispenseItem.name}</div><div style={{fontSize:11,color:"#6b7280"}}>Available: {parseInt(dispenseItem.quantity||0)-parseInt(dispenseItem.reserved_quantity||0)} {dispenseItem.uom}</div></div>
-              <button onClick={()=>setDispenseItem(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1"}}>Change</button>
-            </div>
-          )}
+          {dispenseItems.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:"#9ca3af",fontSize:13,marginBottom:12}}>Search above to add items to this dispense</div>}
+
+          {/* Shared fields */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Quantity *</label><input type="number" min={1} style={s.input} value={dispenseForm.quantity} onChange={e=>setDispenseForm(f=>({...f,quantity:e.target.value}))}/></div>
-            <div style={s.fgroup}><label style={{...s.label,color:"#dc2626"}}>Dispensed By *</label><input style={s.input} value={dispenseForm.dispensedBy} onChange={e=>setDispenseForm(f=>({...f,dispensedBy:e.target.value}))} placeholder="Your name"/></div>
-            <div style={s.fgroup}><label style={s.label}>Patient Name</label><input style={s.input} value={dispenseForm.patientName} onChange={e=>setDispenseForm(f=>({...f,patientName:e.target.value}))}/></div>
-            <div style={s.fgroup}><label style={s.label}>Patient Ref</label><input style={s.input} value={dispenseForm.patientRef} onChange={e=>setDispenseForm(f=>({...f,patientRef:e.target.value}))}/></div>
+            <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={{...s.label,color:"#dc2626"}}>Dispensed By *</label><input style={s.input} value={dispenseForm.dispensedBy} onChange={e=>setDispenseForm(f=>({...f,dispensedBy:e.target.value}))} placeholder="Your name"/></div>
             {deptType==="ward"&&<>
               <div style={s.fgroup}><label style={s.label}>🛏️ Bed Number</label><input style={s.input} value={dispenseForm.bedNumber} onChange={e=>setDispenseForm(f=>({...f,bedNumber:e.target.value}))}/></div>
               <div style={s.fgroup}><label style={s.label}>Ward Number</label><input style={s.input} value={dispenseForm.wardNumber} onChange={e=>setDispenseForm(f=>({...f,wardNumber:e.target.value}))}/></div>
@@ -630,9 +669,12 @@ export default function DepartmentPage({params}:{params:Promise<{id:string}>}){
             </>}
             <div style={{gridColumn:"1/-1",...s.fgroup}}><label style={s.label}>Notes</label><input style={s.input} value={dispenseForm.notes} onChange={e=>setDispenseForm(f=>({...f,notes:e.target.value}))}/></div>
           </div>
+
           <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
             <button onClick={()=>setDispenseModal(false)} style={{...s.btn("ghost"),border:"1px solid #e5e7eb"}}>Cancel</button>
-            <button onClick={handleDispense} style={s.btn("purple")}>Dispense</button>
+            <button onClick={handleDispense} style={s.btn("purple")} disabled={!dispenseItems.length}>
+              Dispense {dispenseItems.length>0?`(${dispenseItems.length} item${dispenseItems.length>1?"s":""})`: ""}
+            </button>
           </div>
         </div></div>
       )}
